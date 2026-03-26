@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BugCatcher</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        width: 320px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        border: 0;
+        border-radius: 8px;
+        background: #0f6cbd;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #333;
+        min-height: 18px;
+      }
+      .config {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #444;
+      }
+      a {
+        color: #0f6cbd;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>BugCatcher</h1>
+    <button id="captureButton">Capture Current Session</button>
+    <div id="status" class="status"></div>
+    <div id="configSummary" class="config"></div>
+    <div class="config" style="margin-top: 8px">
+      Need to configure project key? <a href="#" id="openOptions">Open options</a>
+    </div>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

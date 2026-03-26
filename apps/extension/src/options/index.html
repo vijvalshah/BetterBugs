@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BugCatcher Options</title>
+    <style>
+      body {
+        margin: 24px;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        max-width: 760px;
+      }
+      h1 {
+        margin-bottom: 16px;
+      }
+      form {
+        display: grid;
+        gap: 12px;
+      }
+      label {
+        font-weight: 600;
+      }
+      input[type='text'],
+      input[type='password'] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #c8c8c8;
+        border-radius: 6px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        width: fit-content;
+        padding: 10px 14px;
+        border: 0;
+        border-radius: 8px;
+        background: #0f6cbd;
+        color: white;
+        font-weight: 600;
+      }
+      #status {
+        min-height: 18px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>BugCatcher Options</h1>
+    <form id="configForm">
+      <div>
+        <label for="apiBaseUrl">API Base URL</label>
+        <input id="apiBaseUrl" type="text" placeholder="http://localhost:3001/api/v1" />
+      </div>
+      <div>
+        <label for="projectId">Project ID</label>
+        <input id="projectId" type="text" />
+      </div>
+      <div>
+        <label for="projectKey">Project Key</label>
+        <input id="projectKey" type="password" />
+      </div>
+      <label class="row"><input id="captureNetwork" type="checkbox" /> Capture network</label>
+      <label class="row"><input id="captureConsole" type="checkbox" /> Capture console</label>
+      <label class="row"><input id="captureErrors" type="checkbox" /> Capture errors</label>
+      <button type="submit">Save</button>
+      <div id="status"></div>
+    </form>
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>
