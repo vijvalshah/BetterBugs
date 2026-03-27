@@ -45,15 +45,19 @@ func main() {
 	}
 	defer db.Disconnect()
 
-	// Initialize MinIO storage
+	// Initialize MinIO storage (optional)
 	minioClient, err := storage.NewMinIOClient(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize MinIO: %v", err)
-	}
-
-	// Ensure bucket exists
-	if err := minioClient.EnsureBucket(context.Background()); err != nil {
-		log.Fatalf("Failed to ensure MinIO bucket: %v", err)
+		log.Printf("Warning: MinIO not available: %v. File uploads will be disabled.", err)
+		minioClient = nil
+	} else {
+		// Ensure bucket exists
+		if err := minioClient.EnsureBucket(context.Background()); err != nil {
+			log.Printf("Warning: Failed to ensure MinIO bucket: %v. File uploads will be disabled.", err)
+			minioClient = nil
+		} else {
+			log.Println("MinIO storage initialized successfully")
+		}
 	}
 
 	// Setup Gin

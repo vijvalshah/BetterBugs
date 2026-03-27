@@ -51,7 +51,11 @@ func (m *MinIOClient) PutObject(ctx context.Context, key string, reader io.Reade
 }
 
 func (m *MinIOClient) GetPresignedURL(ctx context.Context, key string, expires time.Duration) (string, error) {
-	return m.client.PresignedGetObject(ctx, m.bucket, key, expires, nil)
+	url, err := m.client.PresignedGetObject(ctx, m.bucket, key, expires, nil)
+	if err != nil {
+		return "", err
+	}
+	return url.String(), nil
 }
 
 func (m *MinIOClient) DeleteObject(ctx context.Context, key string) error {

@@ -6,29 +6,73 @@ bin/
 *.so
 *.dylib
 main
+api
 
 # Test binary
 *.test
 
 # Output of the go coverage tool
 *.out
+coverage.txt
+coverage.html
 
 # Dependency directories
 vendor/
 
 # Go workspace file
 go.work
+go.work.sum
 
-# Environment variables
+# Environment variables - CRITICAL: Never commit credentials
 .env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+.env.development
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # Swagger docs (generated)
 docs/
+swagger.json
+swagger.yaml
 
 # Logs
 *.log
 logs/
+debug.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# MinIO local data (if running locally)
+minio-data/
+.minio/
+
+# Database dumps
+*.sql
+*.dump
+*.bak
+
+# Air live reload (if used)
+.air.toml
+tmp/
+
+# Cloud credentials
+*credentials.json
+*serviceAccount.json
+*.pem
+*.key
+!*.key.example
