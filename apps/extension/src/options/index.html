@@ -32,6 +32,22 @@
         align-items: center;
         gap: 8px;
       }
+      select,
+      input[type='number'] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #c8c8c8;
+        border-radius: 6px;
+      }
+      .section {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .section h2 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
       button {
         width: fit-content;
         padding: 10px 14px;
@@ -50,21 +66,69 @@
   <body>
     <h1>BugCatcher Options</h1>
     <form id="configForm">
-      <div>
-        <label for="apiBaseUrl">API Base URL</label>
-        <input id="apiBaseUrl" type="text" placeholder="http://localhost:3001/api/v1" />
+      <div class="section">
+        <h2>Capture Settings</h2>
+        <div>
+          <label for="apiBaseUrl">API Base URL</label>
+          <input id="apiBaseUrl" type="text" placeholder="http://localhost:3001/api/v1" />
+        </div>
+        <div>
+          <label for="projectId">Project ID</label>
+          <input id="projectId" type="text" />
+        </div>
+        <div>
+          <label for="projectKey">Project Key</label>
+          <input id="projectKey" type="password" />
+        </div>
+        <label class="row"><input id="captureNetwork" type="checkbox" /> Capture network</label>
+        <label class="row"><input id="captureConsole" type="checkbox" /> Capture console</label>
+        <label class="row"><input id="captureErrors" type="checkbox" /> Capture errors</label>
       </div>
-      <div>
-        <label for="projectId">Project ID</label>
-        <input id="projectId" type="text" />
+
+      <div class="section">
+        <h2>AI Analysis (BYOM)</h2>
+        <label class="row"><input id="aiEnabled" type="checkbox" /> Enable AI analysis</label>
+        <div>
+          <label for="aiProvider">Provider</label>
+          <select id="aiProvider">
+            <option value="none">None</option>
+            <option value="openai">OpenAI Compatible</option>
+            <option value="ollama">Ollama</option>
+            <option value="custom">Custom Endpoint</option>
+          </select>
+        </div>
+        <div>
+          <label for="aiModel">Model</label>
+          <input id="aiModel" type="text" placeholder="gpt-4o-mini / llama3.1 / custom model" />
+        </div>
+        <div>
+          <label for="aiBaseUrl">Provider Base URL (optional for OpenAI default)</label>
+          <input id="aiBaseUrl" type="text" placeholder="https://api.openai.com/v1 or http://localhost:11434" />
+        </div>
+        <div>
+          <label for="aiApiKey">Provider API Key</label>
+          <input id="aiApiKey" type="password" placeholder="Required for OpenAI/Custom" />
+        </div>
+        <div>
+          <label for="aiTemperature">Temperature (0-1)</label>
+          <input id="aiTemperature" type="number" min="0" max="1" step="0.1" />
+        </div>
+        <div>
+          <label for="aiMaxTokens">Max Tokens (64-4096)</label>
+          <input id="aiMaxTokens" type="number" min="64" max="4096" step="1" />
+        </div>
+        <label class="row"><input id="aiCodeContextEnabled" type="checkbox" /> Enable code-context analysis</label>
+        <label class="row"><input id="aiEmbeddingsEnabled" type="checkbox" /> Embeddings available for repository lookup</label>
+        <div>
+          <label for="aiRepositoryRef">Repository Reference</label>
+          <input id="aiRepositoryRef" type="text" placeholder="owner/repo or internal repository identifier" />
+        </div>
+        <div>
+          <label for="aiMaxCodeContextFiles">Max Code Context Files (1-12)</label>
+          <input id="aiMaxCodeContextFiles" type="number" min="1" max="12" step="1" />
+        </div>
       </div>
-      <div>
-        <label for="projectKey">Project Key</label>
-        <input id="projectKey" type="password" />
-      </div>
-      <label class="row"><input id="captureNetwork" type="checkbox" /> Capture network</label>
-      <label class="row"><input id="captureConsole" type="checkbox" /> Capture console</label>
-      <label class="row"><input id="captureErrors" type="checkbox" /> Capture errors</label>
+
       <button type="submit">Save</button>
       <div id="status"></div>
     </form>

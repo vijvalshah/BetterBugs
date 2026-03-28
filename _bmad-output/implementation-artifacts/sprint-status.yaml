@@ -74,11 +74,11 @@ development_status:
   6-3-provide-detailed-synchronized-replay-workspace: review
   6-4-support-advanced-replay-controls-and-bookmarks: review
   epic-6-retrospective: optional
-  epic-7: backlog
-  7-1-configure-ai-providers-and-trigger-analysis-safely: backlog
-  7-2-present-actionable-root-cause-analysis-in-ui: backlog
-  7-3-extend-ai-depth-with-cost-classification-and-similar-issues: backlog
-  7-4-prepare-ai-for-code-context-and-multi-file-reasoning: backlog
+  epic-7: in-progress
+  7-1-configure-ai-providers-and-trigger-analysis-safely: review
+  7-2-present-actionable-root-cause-analysis-in-ui: review
+  7-3-extend-ai-depth-with-cost-classification-and-similar-issues: review
+  7-4-prepare-ai-for-code-context-and-multi-file-reasoning: review
   epic-7-retrospective: optional
   epic-8: backlog
   8-1-create-first-class-github-issue-export-flow: backlog

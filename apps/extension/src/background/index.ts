@@ -21,6 +21,7 @@ import {
   type QueuedSession,
 } from './queue-utils';
 import { SessionManager } from '../shared/session-manager';
+import { runAiAnalysis, validateAiProviderConfig } from './ai-analysis';
 
 type TabCaptureState = {
   buffer: RollingCaptureBuffer;
@@ -109,6 +110,10 @@ function normalizeConfig(raw: Partial<ExtensionConfig> | undefined): ExtensionCo
   return {
     ...DEFAULT_CONFIG,
     ...(raw ?? {}),
+    ai: {
+      ...DEFAULT_CONFIG.ai,
+      ...((raw?.ai ?? {}) as Partial<ExtensionConfig['ai']>),
+    },
   };
 }
 
@@ -619,6 +624,109 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
             ok: false,
             connected: false,
             message: `Connection test failed: ${details}`,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'BC_AI_ANALYZE_SESSION_REQUEST' && message.payload) {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_AI_ANALYZE_SESSION_RESPONSE',
+          payload: {
+            ok: false,
+            status: 'failed',
+            message: 'Project key is empty. Set it in Options.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const config = await getConfig();
+
+        const payload = message.payload as {
+          sessionId?: string;
+          modelOverride?: string;
+          includeCodeContext?: boolean;
+        };
+
+        const validationError = validateAiProviderConfig({
+          ...config.ai,
+          model: payload.modelOverride?.trim() || config.ai.model,
+        });
+        if (validationError) {
+          sendResponse({
+            type: 'BC_AI_ANALYZE_SESSION_RESPONSE',
+            payload: {
+              ok: false,
+              status: 'failed',
+              message: validationError,
+            },
+          });
+          return;
+        }
+
+        const sessionId = payload.sessionId || '';
+        if (!sessionId) {
+          sendResponse({
+            type: 'BC_AI_ANALYZE_SESSION_RESPONSE',
+            payload: {
+              ok: false,
+              status: 'failed',
+              message: 'Session ID is required for AI analysis.',
+            },
+          });
+          return;
+        }
+
+        sendStatusUpdate('uploading', 'Running AI analysis...');
+
+        const session = await manager.getSessionDetail(sessionId, true);
+        if (!session) {
+          sendStatusUpdate('error', 'Session not found for AI analysis.');
+          sendResponse({
+            type: 'BC_AI_ANALYZE_SESSION_RESPONSE',
+            payload: {
+              ok: false,
+              status: 'failed',
+              message: 'Session not found for analysis.',
+            },
+          });
+          return;
+        }
+
+        const analysis = await runAiAnalysis(config.ai, session, {
+          modelOverride: payload.modelOverride,
+          includeCodeContext: payload.includeCodeContext,
+        });
+        const statusMessage = analysis.status === 'completed'
+          ? 'AI analysis completed.'
+          : 'AI fallback analysis completed.';
+        sendStatusUpdate('success', statusMessage);
+
+        sendResponse({
+          type: 'BC_AI_ANALYZE_SESSION_RESPONSE',
+          payload: {
+            ok: true,
+            status: analysis.status,
+            message: statusMessage,
+            analysis,
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown analysis error';
+        sendStatusUpdate('error', `AI analysis failed: ${details}`);
+        sendResponse({
+          type: 'BC_AI_ANALYZE_SESSION_RESPONSE',
+          payload: {
+            ok: false,
+            status: 'failed',
+            message: `AI analysis failed: ${details}`,
           },
         });
       }

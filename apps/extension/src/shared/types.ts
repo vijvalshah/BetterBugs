@@ -99,6 +99,22 @@ export interface CaptureMediaMetadata {
   eventCount: number;
 }
 
+export type AiProvider = 'none' | 'openai' | 'ollama' | 'custom';
+
+export interface AiProviderConfig {
+  enabled: boolean;
+  provider: AiProvider;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+  temperature: number;
+  maxTokens: number;
+  codeContextEnabled: boolean;
+  embeddingsEnabled: boolean;
+  repositoryRef: string;
+  maxCodeContextFiles: number;
+}
+
 export interface ExtensionConfig {
   apiBaseUrl: string;
   projectId: string;
@@ -110,6 +126,7 @@ export interface ExtensionConfig {
   sanitizationRules?: string[];
   captureResolution: '720p' | '1080p';
   captureFrameRate: number;
+  ai: AiProviderConfig;
 }
 
 export const DEFAULT_CONFIG: ExtensionConfig = {
@@ -122,6 +139,19 @@ export const DEFAULT_CONFIG: ExtensionConfig = {
   captureState: true,
   captureResolution: '1080p',
   captureFrameRate: 30,
+  ai: {
+    enabled: false,
+    provider: 'none',
+    model: '',
+    baseUrl: '',
+    apiKey: '',
+    temperature: 0.2,
+    maxTokens: 700,
+    codeContextEnabled: false,
+    embeddingsEnabled: false,
+    repositoryRef: '',
+    maxCodeContextFiles: 5,
+  },
 };
 
 export interface BackgroundMessage<T = unknown> {
@@ -151,6 +181,8 @@ export interface BackgroundMessage<T = unknown> {
     | 'BC_DELETE_SESSION_REQUEST'
     | 'BC_DELETE_SESSION_RESPONSE'
     | 'BC_TEST_API_CONNECTION_REQUEST'
-    | 'BC_TEST_API_CONNECTION_RESPONSE';
+    | 'BC_TEST_API_CONNECTION_RESPONSE'
+    | 'BC_AI_ANALYZE_SESSION_REQUEST'
+    | 'BC_AI_ANALYZE_SESSION_RESPONSE';
   payload?: T;
 }
