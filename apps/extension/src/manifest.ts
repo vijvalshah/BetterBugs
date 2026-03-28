@@ -37,6 +37,12 @@ const manifest = defineManifest({
       world: 'MAIN',
     },
   ],
+  web_accessible_resources: [
+    {
+      resources: ['src/session-details/*'],
+      matches: ['<all_urls>'],
+    },
+  ],
   options_ui: {
     page: 'src/options/index.html',
     open_in_tab: true,
