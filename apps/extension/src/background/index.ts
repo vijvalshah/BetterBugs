@@ -215,6 +215,12 @@ type UploadResult = {
 
 async function uploadSessionPayload(payload: SessionPayload, config: ExtensionConfig): Promise<UploadResult> {
   const normalizedPayload = normalizeSessionPayloadForUpload(payload, config);
+  const uploadPayload = {
+    ...normalizedPayload,
+    // API events are stored with server-generated Mongo _id values.
+    // Strip client-side event ids to avoid ObjectID unmarshal errors.
+    events: normalizedPayload.events.map(({ id: _id, ...event }) => event),
+  };
   const normalizedBaseUrl = config.apiBaseUrl.replace(/\/+$/, '').replace(/\/sessions$/, '');
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => abortController.abort(), UPLOAD_TIMEOUT_MS);
@@ -227,7 +233,7 @@ async function uploadSessionPayload(payload: SessionPayload, config: ExtensionCo
         'Content-Type': 'application/json',
         'X-Project-Key': config.projectKey,
       },
-      body: JSON.stringify(normalizedPayload),
+      body: JSON.stringify(uploadPayload),
       signal: abortController.signal,
     });
   } catch (error: unknown) {

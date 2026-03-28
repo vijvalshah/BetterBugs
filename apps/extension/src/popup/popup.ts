@@ -1227,13 +1227,17 @@ async function openReplayWorkspace(sessionId: string): Promise<void> {
     }
 
     const session = payload.session;
-    const computedMaxTimestamp = session.events.reduce((max, event) => Math.max(max, event.timestamp), 0);
+    const replayEvents = Array.isArray(session.events) ? session.events : [];
+    const computedMaxTimestamp = replayEvents.reduce((max, event) => Math.max(max, event.timestamp), 0);
     const fallbackDuration = typeof (session as { duration?: number }).duration === 'number'
       ? (session as { duration?: number }).duration || 0
       : 0;
 
     replayState = {
-      session,
+      session: {
+        ...session,
+        events: replayEvents,
+      },
       currentTimeMs: 0,
       maxTimeMs: Math.max(computedMaxTimestamp, fallbackDuration, 1000),
       zoomLevel: 1,

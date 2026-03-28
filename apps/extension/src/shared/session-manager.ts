@@ -170,8 +170,10 @@ export class SessionManager {
     if (!forceRefresh) {
       const cached = this.cache.get(sessionId);
       if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
-        // Return cached version
-        return cached as unknown as ApiSessionDetail;
+        const maybeDetail = cached as unknown as Partial<ApiSessionDetail>;
+        if (Array.isArray(maybeDetail.events)) {
+          return maybeDetail as ApiSessionDetail;
+        }
       }
     }
 
