@@ -103,6 +103,49 @@ curl http://localhost:3001/api/v1/sessions \
 
 Visit http://localhost:3001/docs/index.html (after running `make swagger`)
 
+### 7. Build and Load Browser Extension (Chrome)
+
+```bash
+# From repo root
+cd apps/extension
+
+# Install dependencies
+npm install
+
+# Build extension
+npm run build
+```
+
+The build output is created at:
+
+`apps/extension/dist`
+
+Load it in Chrome:
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select the folder `apps/extension/dist`
+
+### 8. Configure Extension and Capture a Session
+
+After loading the extension:
+
+1. Click the extension icon and open **Options**
+2. Set:
+   - API Base URL: `http://localhost:3001/api/v1`
+   - Project ID: `dev-project`
+   - Project Key: `dev-key` (or any non-empty key for Phase 1)
+3. Save settings
+4. Open any webpage, then click **Capture Current Session** in the popup
+
+Verify sessions via API:
+
+```bash
+curl http://localhost:3001/api/v1/sessions \
+  -H "X-Project-Key: dev-key"
+```
+
 ---
 
 ## Next: Build Extension & Dashboard
