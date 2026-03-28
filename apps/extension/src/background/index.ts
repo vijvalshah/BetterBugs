@@ -25,6 +25,7 @@ import {
 import { SessionManager } from '../shared/session-manager';
 import { runAiAnalysis, validateAiProviderConfig } from './ai-analysis';
 import { createExportArtifact } from './export-destinations';
+import { dispatchRoutingNotifications, type NotificationDeliveryResult } from './routing-notifications';
 
 type TabCaptureState = {
   buffer: RollingCaptureBuffer;
@@ -100,6 +101,31 @@ function destinationLabel(destination: ExportDestination): string {
   return 'Share link';
 }
 
+function summarizeNotificationResults(results: NotificationDeliveryResult[]): {
+  summary: string;
+  failures: number;
+} {
+  if (results.length === 0) {
+    return {
+      summary: 'disabled',
+      failures: 0,
+    };
+  }
+
+  const failures = results.filter((result) => !result.success).length;
+  const summary = results
+    .map((result) => {
+      const status = result.success ? 'ok' : `failed(${result.error || 'unknown'})`;
+      return `${result.channel}:${status}:attempts=${result.attempts}`;
+    })
+    .join(' | ');
+
+  return {
+    summary,
+    failures,
+  };
+}
+
 function getTabState(tabId: number): TabCaptureState {
   let state = tabState.get(tabId);
   if (!state) {
@@ -173,6 +199,14 @@ function normalizeConfig(raw: Partial<ExtensionConfig> | undefined): ExtensionCo
     shareLinks: {
       ...DEFAULT_CONFIG.shareLinks,
       ...((raw?.shareLinks ?? {}) as Partial<ExtensionConfig['shareLinks']>),
+    },
+    routing: {
+      ...DEFAULT_CONFIG.routing,
+      ...((raw?.routing ?? {}) as Partial<ExtensionConfig['routing']>),
+    },
+    notifications: {
+      ...DEFAULT_CONFIG.notifications,
+      ...((raw?.notifications ?? {}) as Partial<ExtensionConfig['notifications']>),
     },
   };
 }
@@ -963,6 +997,19 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
         }
 
         const artifact = await createExportArtifact(destination, config, session, payload.analysis, payload.shareOptions);
+        const routing = artifact.routing ?? {
+          labels: [],
+          assignees: [],
+          reasons: [],
+        };
+        const notificationResults = await dispatchRoutingNotifications(config.notifications, {
+          destination,
+          session,
+          artifact,
+          routing,
+        });
+        const notificationOutcome = summarizeNotificationResults(notificationResults);
+
         const auditRecord: ExportAuditRecord = {
           id: `${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
           createdAt: new Date().toISOString(),
@@ -973,11 +1020,25 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
           artifactTitle: artifact.artifactTitle,
           permission: artifact.permission,
           expiresAt: artifact.expiresAt,
-          metadata: artifact.metadata,
+          metadata: {
+            ...artifact.metadata,
+            routingLabels: routing.labels.join(','),
+            routingAssignees: routing.assignees.join(','),
+            routingReasons: routing.reasons.join(' | '),
+            notificationSummary: notificationOutcome.summary,
+            notificationFailures: notificationOutcome.failures,
+          },
         };
         await appendExportAuditRecord(auditRecord);
 
-        sendStatusUpdate('success', `${destinationLabel(destination)} artifact exported.`);
+        if (notificationOutcome.failures > 0) {
+          sendStatusUpdate(
+            'error',
+            `${destinationLabel(destination)} artifact exported with notification warnings.`,
+          );
+        } else {
+          sendStatusUpdate('success', `${destinationLabel(destination)} artifact exported.`);
+        }
 
         sendResponse({
           type: 'BC_EXPORT_DESTINATION_RESPONSE',
@@ -991,7 +1052,16 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
             expiresAt: artifact.expiresAt,
             auditId: auditRecord.id,
             destinationMetadata: artifact.metadata,
-            message: `${destinationLabel(destination)} export completed.`,
+            routingLabels: routing.labels,
+            routingAssignees: routing.assignees,
+            routingReasons: routing.reasons,
+            notificationResults,
+            notificationSummary: notificationOutcome.summary,
+            notificationFailures: notificationOutcome.failures,
+            message:
+              notificationOutcome.failures > 0
+                ? `${destinationLabel(destination)} export completed with notification warnings.`
+                : `${destinationLabel(destination)} export completed.`,
           },
         });
       } catch (error: unknown) {

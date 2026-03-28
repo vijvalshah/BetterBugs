@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildRoutingRecommendation,
   createExportArtifact,
   createGitLabIssue,
   createLinearIssue,
@@ -47,6 +48,31 @@ afterEach(() => {
 });
 
 describe('export-destinations', () => {
+  it('builds routing recommendations from rules and analysis context', () => {
+    const routing = buildRoutingRecommendation(
+      {
+        enabled: true,
+        labelRules: 'settings:frontend|triage\nstate:state-machine',
+        ownershipRules: 'settings:frontend-oncall\nreducer:state-oncall',
+      },
+      session,
+      {
+        summary: 'Settings reducer fails on undefined state object',
+        classification: 'frontend-runtime',
+        suggestedFiles: ['src/settings/reducer.ts'],
+      },
+    );
+
+    expect(routing.labels).toContain('bug');
+    expect(routing.labels).toContain('frontend');
+    expect(routing.labels).toContain('triage');
+    expect(routing.labels).toContain('classification:frontend-runtime');
+    expect(routing.assignees).toContain('frontend-oncall');
+    expect(routing.assignees).toContain('state-oncall');
+    expect(routing.reasons.some((reason) => reason.includes('label-rule:settings'))).toBe(true);
+    expect(routing.reasons.some((reason) => reason.includes('owner-rule:settings'))).toBe(true);
+  });
+
   it('validates share link expiry bounds', () => {
     expect(
       validateShareLinkConfig({
@@ -177,5 +203,57 @@ describe('export-destinations', () => {
     expect(result.destination).toBe('share-link');
     expect(result.permission).toBe('editor');
     expect(result.expiresAt).toBeTruthy();
+  });
+
+  it('applies routing labels and assignees when exporting to GitHub', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        html_url: 'https://github.com/example-org/example-repo/issues/88',
+        number: 88,
+        title: '[BugCatcher] routed issue',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    const config: ExtensionConfig = {
+      ...DEFAULT_CONFIG,
+      github: {
+        enabled: true,
+        owner: 'example-org',
+        repo: 'example-repo',
+        token: 'ghp_test',
+        labels: 'bug',
+        assignees: 'core-maintainer',
+      },
+      routing: {
+        enabled: true,
+        labelRules: 'settings:frontend|triage',
+        ownershipRules: 'settings:frontend-oncall',
+      },
+    };
+
+    const result = await createExportArtifact(
+      'github',
+      config,
+      session,
+      {
+        summary: 'Settings pane crashes on load',
+        classification: 'frontend-runtime',
+      },
+    );
+
+    expect(result.routing?.labels).toContain('frontend');
+    expect(result.routing?.assignees).toContain('frontend-oncall');
+    expect(String(result.metadata.routingLabels || '')).toContain('frontend');
+    expect(String(result.metadata.routingAssignees || '')).toContain('frontend-oncall');
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit)?.body || '{}')) as {
+      labels?: string[];
+      assignees?: string[];
+    };
+    expect(requestBody.labels).toContain('frontend');
+    expect(requestBody.assignees).toContain('frontend-oncall');
+    expect(requestBody.assignees).toContain('core-maintainer');
   });
 });

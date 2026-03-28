@@ -43,6 +43,14 @@ const shareLinksBaseUrlInput = document.getElementById('shareLinksBaseUrl') as H
 const shareLinksDefaultPermissionInput = document.getElementById('shareLinksDefaultPermission') as HTMLSelectElement;
 const shareLinksDefaultExpiryHoursInput = document.getElementById('shareLinksDefaultExpiryHours') as HTMLInputElement;
 const shareLinksRequireAuthInput = document.getElementById('shareLinksRequireAuth') as HTMLInputElement;
+const routingEnabledInput = document.getElementById('routingEnabled') as HTMLInputElement;
+const routingLabelRulesInput = document.getElementById('routingLabelRules') as HTMLTextAreaElement;
+const routingOwnershipRulesInput = document.getElementById('routingOwnershipRules') as HTMLTextAreaElement;
+const notificationEnabledInput = document.getElementById('notificationEnabled') as HTMLInputElement;
+const notificationSlackWebhookUrlInput = document.getElementById('notificationSlackWebhookUrl') as HTMLInputElement;
+const notificationWebhookUrlInput = document.getElementById('notificationWebhookUrl') as HTMLInputElement;
+const notificationMaxRetriesInput = document.getElementById('notificationMaxRetries') as HTMLInputElement;
+const notificationRetryBackoffMsInput = document.getElementById('notificationRetryBackoffMs') as HTMLInputElement;
 let lastLoadedConfig: ExtensionConfig = { ...DEFAULT_CONFIG };
 const CONFIG_KEY = 'bugcatcherConfig';
 const MESSAGE_TIMEOUT_MS = 5_000;
@@ -81,6 +89,8 @@ function fillForm(config: ExtensionConfig): void {
     gitlab: { ...config.gitlab },
     linear: { ...config.linear },
     shareLinks: { ...config.shareLinks },
+    routing: { ...config.routing },
+    notifications: { ...config.notifications },
   };
   apiBaseUrlInput.value = config.apiBaseUrl;
   projectIdInput.value = config.projectId;
@@ -122,6 +132,14 @@ function fillForm(config: ExtensionConfig): void {
   shareLinksDefaultPermissionInput.value = config.shareLinks.defaultPermission;
   shareLinksDefaultExpiryHoursInput.value = String(config.shareLinks.defaultExpiryHours);
   shareLinksRequireAuthInput.checked = config.shareLinks.requireAuth;
+  routingEnabledInput.checked = config.routing.enabled;
+  routingLabelRulesInput.value = config.routing.labelRules;
+  routingOwnershipRulesInput.value = config.routing.ownershipRules;
+  notificationEnabledInput.checked = config.notifications.enabled;
+  notificationSlackWebhookUrlInput.value = config.notifications.slackWebhookUrl;
+  notificationWebhookUrlInput.value = config.notifications.webhookUrl;
+  notificationMaxRetriesInput.value = String(config.notifications.maxRetries);
+  notificationRetryBackoffMsInput.value = String(config.notifications.retryBackoffMs);
 }
 
 function validateAiConfig(config: ExtensionConfig): string | null {
@@ -246,6 +264,45 @@ function validateShareLinksConfig(config: ExtensionConfig): string | null {
   return null;
 }
 
+function validateRoutingConfig(config: ExtensionConfig): string | null {
+  if (!config.routing.enabled) {
+    return null;
+  }
+
+  const ruleLines = `${config.routing.labelRules}\n${config.routing.ownershipRules}`
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  for (const line of ruleLines) {
+    if (!line.includes(':') && !line.includes('=>')) {
+      return 'Routing rules must use "pattern:value" or "pattern=>value" format.';
+    }
+  }
+
+  return null;
+}
+
+function validateNotificationsConfig(config: ExtensionConfig): string | null {
+  if (!config.notifications.enabled) {
+    return null;
+  }
+
+  if (!config.notifications.slackWebhookUrl.trim() && !config.notifications.webhookUrl.trim()) {
+    return 'At least one notification endpoint is required when notifications are enabled.';
+  }
+
+  if (config.notifications.maxRetries < 0 || config.notifications.maxRetries > 5) {
+    return 'Notification max retries must be between 0 and 5.';
+  }
+
+  if (config.notifications.retryBackoffMs < 100 || config.notifications.retryBackoffMs > 30000) {
+    return 'Notification retry backoff must be between 100 and 30000 ms.';
+  }
+
+  return null;
+}
+
 async function loadConfig(): Promise<void> {
   try {
     const result = await chrome.storage.sync.get(CONFIG_KEY);
@@ -273,6 +330,14 @@ async function loadConfig(): Promise<void> {
         ...DEFAULT_CONFIG.shareLinks,
         ...((payload?.shareLinks ?? {}) as Partial<ExtensionConfig['shareLinks']>),
       },
+      routing: {
+        ...DEFAULT_CONFIG.routing,
+        ...((payload?.routing ?? {}) as Partial<ExtensionConfig['routing']>),
+      },
+      notifications: {
+        ...DEFAULT_CONFIG.notifications,
+        ...((payload?.notifications ?? {}) as Partial<ExtensionConfig['notifications']>),
+      },
     });
     setStatus('');
   } catch (error: unknown) {
@@ -284,6 +349,8 @@ async function loadConfig(): Promise<void> {
       gitlab: { ...DEFAULT_CONFIG.gitlab },
       linear: { ...DEFAULT_CONFIG.linear },
       shareLinks: { ...DEFAULT_CONFIG.shareLinks },
+      routing: { ...DEFAULT_CONFIG.routing },
+      notifications: { ...DEFAULT_CONFIG.notifications },
     });
   }
 }
@@ -352,6 +419,24 @@ form.addEventListener('submit', async (event) => {
       ),
       requireAuth: shareLinksRequireAuthInput.checked,
     },
+    routing: {
+      enabled: routingEnabledInput.checked,
+      labelRules: routingLabelRulesInput.value.trim(),
+      ownershipRules: routingOwnershipRulesInput.value.trim(),
+    },
+    notifications: {
+      enabled: notificationEnabledInput.checked,
+      slackWebhookUrl: notificationSlackWebhookUrlInput.value.trim(),
+      webhookUrl: notificationWebhookUrlInput.value.trim(),
+      maxRetries: Number.parseInt(
+        notificationMaxRetriesInput.value || String(DEFAULT_CONFIG.notifications.maxRetries),
+        10,
+      ),
+      retryBackoffMs: Number.parseInt(
+        notificationRetryBackoffMsInput.value || String(DEFAULT_CONFIG.notifications.retryBackoffMs),
+        10,
+      ),
+    },
   };
 
   const validationError = validateAiConfig(nextConfig);
@@ -381,6 +466,18 @@ form.addEventListener('submit', async (event) => {
   const shareLinksValidationError = validateShareLinksConfig(nextConfig);
   if (shareLinksValidationError) {
     setStatus(shareLinksValidationError);
+    return;
+  }
+
+  const routingValidationError = validateRoutingConfig(nextConfig);
+  if (routingValidationError) {
+    setStatus(routingValidationError);
+    return;
+  }
+
+  const notificationsValidationError = validateNotificationsConfig(nextConfig);
+  if (notificationsValidationError) {
+    setStatus(notificationsValidationError);
     return;
   }
 
