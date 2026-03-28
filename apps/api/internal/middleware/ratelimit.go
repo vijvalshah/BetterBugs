@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -30,8 +31,44 @@ func RateLimit(cfg *config.Config) gin.HandlerFunc {
 			projectID = c.ClientIP()
 		}
 
-		key := projectID.(string)
-		limiter := getVisitor(key, cfg)
+		key := fmt.Sprint(projectID)
+
+		rateLimitReqs := cfg.RateLimitReqs
+		if value, ok := c.Get("rateLimitReqs"); ok {
+			switch cast := value.(type) {
+			case int:
+				rateLimitReqs = cast
+			case int32:
+				rateLimitReqs = int(cast)
+			case int64:
+				rateLimitReqs = int(cast)
+			case float64:
+				rateLimitReqs = int(cast)
+			}
+		}
+
+		rateLimitWindow := cfg.RateLimitWindow
+		if value, ok := c.Get("rateLimitWindow"); ok {
+			switch cast := value.(type) {
+			case int:
+				rateLimitWindow = cast
+			case int32:
+				rateLimitWindow = int(cast)
+			case int64:
+				rateLimitWindow = int(cast)
+			case float64:
+				rateLimitWindow = int(cast)
+			}
+		}
+
+		if rateLimitReqs <= 0 {
+			rateLimitReqs = cfg.RateLimitReqs
+		}
+		if rateLimitWindow <= 0 {
+			rateLimitWindow = cfg.RateLimitWindow
+		}
+
+		limiter := getVisitor(fmt.Sprintf("%s:%d:%d", key, rateLimitReqs, rateLimitWindow), rateLimitReqs, rateLimitWindow)
 
 		if !limiter.Allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{
@@ -46,13 +83,13 @@ func RateLimit(cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
-func getVisitor(key string, cfg *config.Config) *rate.Limiter {
+func getVisitor(key string, rateLimitReqs int, rateLimitWindow int) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()
 
 	v, exists := visitors[key]
 	if !exists {
-		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitReqs)/rate.Limit(cfg.RateLimitWindow), cfg.RateLimitReqs)
+		limiter := rate.NewLimiter(rate.Limit(rateLimitReqs)/rate.Limit(rateLimitWindow), rateLimitReqs)
 		visitors[key] = &visitor{limiter, time.Now()}
 		return limiter
 	}

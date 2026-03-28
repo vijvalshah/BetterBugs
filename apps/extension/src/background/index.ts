@@ -19,6 +19,7 @@ import {
   enqueueSession,
   type QueuedSession,
 } from './queue-utils';
+import { SessionManager } from '../shared/session-manager';
 
 type TabCaptureState = {
   buffer: RollingCaptureBuffer;
@@ -33,6 +34,25 @@ const MAX_BUFFER_EVENTS = 2_400;
 const UPLOAD_TIMEOUT_MS = 10_000;
 const tabState = new Map<number, TabCaptureState>();
 let badgeResetTimer: ReturnType<typeof setTimeout> | undefined;
+let sessionManager: SessionManager | null = null;
+
+async function initializeSessionManager(): Promise<SessionManager | null> {
+  if (sessionManager) {
+    return sessionManager;
+  }
+
+  const config = await getConfig();
+  if (!config.projectKey) {
+    return null;
+  }
+
+  sessionManager = new SessionManager(config.apiBaseUrl, config.projectKey);
+  return sessionManager;
+}
+
+function resetSessionManager(): void {
+  sessionManager = null;
+}
 
 function getTabState(tabId: number): TabCaptureState {
   let state = tabState.get(tabId);
@@ -391,10 +411,207 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
     return true;
   }
 
+  if (message.type === 'BC_GET_SESSIONS_REQUEST') {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_GET_SESSIONS_RESPONSE',
+          payload: {
+            ok: false,
+            message: 'Project key is empty. Set it in Options.',
+            sessions: [],
+            total: 0,
+            limit: 0,
+            offset: 0,
+          },
+        });
+        return;
+      }
+
+      try {
+        const config = await getConfig();
+        const payload = (message.payload ?? {}) as {
+          q?: string;
+          tag?: string;
+          hasError?: boolean;
+          type?: string;
+          sortBy?: string;
+          sortOrder?: 'asc' | 'desc';
+          limit?: number;
+          offset?: number;
+          forceRefresh?: boolean;
+        };
+
+        const hasError = payload.type === 'errors' ? true : payload.hasError;
+        const list = await manager.listSessions({
+          projectId: config.projectId,
+          q: payload.q,
+          tag: payload.tag,
+          hasError,
+          sortBy: payload.sortBy,
+          sortOrder: payload.sortOrder,
+          limit: payload.limit,
+          offset: payload.offset,
+          forceRefresh: payload.forceRefresh,
+        });
+
+        sendResponse({
+          type: 'BC_GET_SESSIONS_RESPONSE',
+          payload: {
+            ok: true,
+            sessions: list.items,
+            total: list.total,
+            limit: list.limit,
+            offset: list.offset,
+            sortBy: list.sortBy,
+            sortOrder: list.sortOrder,
+            message: `Fetched ${list.items.length} session(s)`,
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_GET_SESSIONS_RESPONSE',
+          payload: {
+            ok: false,
+            message: `Failed to fetch sessions: ${details}`,
+            sessions: [],
+            total: 0,
+            limit: 0,
+            offset: 0,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'BC_GET_SESSION_DETAIL_REQUEST' && message.payload) {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_GET_SESSION_DETAIL_RESPONSE',
+          payload: {
+            ok: false,
+            message: 'Project key is empty. Set it in Options.',
+            session: null,
+          },
+        });
+        return;
+      }
+
+      try {
+        const payload = message.payload as { sessionId?: string };
+        const session = await manager.getSessionDetail(payload.sessionId ?? '');
+        sendResponse({
+          type: 'BC_GET_SESSION_DETAIL_RESPONSE',
+          payload: {
+            ok: Boolean(session),
+            session,
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_GET_SESSION_DETAIL_RESPONSE',
+          payload: {
+            ok: false,
+            message: `Failed to fetch session details: ${details}`,
+            session: null,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'BC_DELETE_SESSION_REQUEST' && message.payload) {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_DELETE_SESSION_RESPONSE',
+          payload: {
+            ok: false,
+            message: 'Project key is empty. Set it in Options.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const payload = message.payload as { sessionId?: string };
+        const ok = await manager.deleteSession(payload.sessionId ?? '');
+        sendResponse({
+          type: 'BC_DELETE_SESSION_RESPONSE',
+          payload: {
+            ok,
+            message: ok ? 'Session deleted successfully' : 'Failed to delete session',
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_DELETE_SESSION_RESPONSE',
+          payload: {
+            ok: false,
+            message: `Failed to delete session: ${details}`,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'BC_TEST_API_CONNECTION_REQUEST') {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_TEST_API_CONNECTION_RESPONSE',
+          payload: {
+            ok: false,
+            connected: false,
+            message: 'Project key is empty. Set it in Options.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const connected = await manager.testConnection();
+        sendResponse({
+          type: 'BC_TEST_API_CONNECTION_RESPONSE',
+          payload: {
+            ok: connected,
+            connected,
+            message: connected ? 'Connection successful' : 'Connection failed',
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_TEST_API_CONNECTION_RESPONSE',
+          payload: {
+            ok: false,
+            connected: false,
+            message: `Connection test failed: ${details}`,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'BC_CONFIG_SAVE' && message.payload) {
     const nextConfig = normalizeConfig(message.payload as Partial<ExtensionConfig>);
     setConfig(nextConfig)
-      .then(() => sendResponse({ type: 'BC_CONFIG_RESPONSE', payload: nextConfig }))
+      .then(() => {
+        resetSessionManager();
+        sendResponse({ type: 'BC_CONFIG_RESPONSE', payload: nextConfig });
+      })
       .catch((error: unknown) => {
         const details = error instanceof Error ? error.message : 'Unknown error';
         sendResponse({ type: 'BC_CONFIG_RESPONSE', payload: { ...nextConfig, error: details } });

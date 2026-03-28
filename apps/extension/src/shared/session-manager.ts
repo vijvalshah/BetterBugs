@@ -3,7 +3,7 @@
  * Handles fetching and caching sessions from the API
  */
 
-import type { ApiSession, ApiSessionDetail } from './api-client';
+import type { ApiListResponse, ApiSession, ApiSessionDetail } from './api-client';
 import { BugCatcherApiClient } from './api-client';
 
 export interface CachedSession extends ApiSession {
@@ -23,6 +23,73 @@ export class SessionManager {
   }
 
   /**
+   * List sessions with triage-friendly filtering and pagination.
+   */
+  async listSessions(options: {
+    projectId: string;
+    q?: string;
+    tag?: string;
+    hasError?: boolean;
+    limit?: number;
+    offset?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    forceRefresh?: boolean;
+  }): Promise<ApiListResponse> {
+    const {
+      projectId,
+      q,
+      tag,
+      hasError,
+      limit = 20,
+      offset = 0,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      forceRefresh = false,
+    } = options;
+
+    const cacheKey = `list_${projectId}_${q ?? ''}_${tag ?? ''}_${String(hasError)}_${limit}_${offset}_${sortBy}_${sortOrder}`;
+    const now = Date.now();
+    const lastFetch = this.lastListFetch.get(cacheKey) || 0;
+
+    if (!forceRefresh && now-lastFetch < CACHE_TTL_MS) {
+      const cached = Array.from(this.cache.values())
+        .filter((session) => now-session.cachedAt < CACHE_TTL_MS)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+      return {
+        items: cached.slice(0, limit),
+        total: cached.length,
+        limit,
+        offset,
+        sortBy,
+        sortOrder,
+      };
+    }
+
+    const response = await this.client.listSessions({
+      projectId,
+      q,
+      tag,
+      hasError,
+      limit,
+      offset,
+      sortBy,
+      sortOrder,
+    });
+
+    this.lastListFetch.set(cacheKey, now);
+    response.items.forEach((session) => {
+      this.cache.set(session.sessionId, {
+        ...session,
+        cachedAt: now,
+      });
+    });
+
+    return response;
+  }
+
+  /**
    * Get recent sessions (cached)
    */
   async getRecentSessions(projectId: string, forceRefresh = false): Promise<ApiSession[]> {
@@ -32,7 +99,9 @@ export class SessionManager {
 
     if (!forceRefresh && now - lastFetch < CACHE_TTL_MS) {
       // Return from cache
-      const cached = Array.from(this.cache.values()).filter((s) => !s || !s.id);
+      const cached = Array.from(this.cache.values())
+        .filter((s) => Boolean(s?.id) && now-s.cachedAt < CACHE_TTL_MS)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       return cached.length > 0 ? cached : [];
     }
 

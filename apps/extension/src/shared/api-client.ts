@@ -24,6 +24,10 @@ export interface ApiSession {
   media: {
     hasReplay: boolean;
   };
+  signedMedia?: {
+    video?: string;
+    domSnapshots?: string[];
+  };
   createdAt: string;
 }
 
@@ -153,8 +157,17 @@ export class BugCatcherApiClient {
       throw new Error(`Failed to fetch session: ${response.statusText}`);
     }
 
-    const data = (await response.json()) as { session: ApiSessionDetail };
-    return data.session;
+    const data = (await response.json()) as {
+      session: Omit<ApiSessionDetail, 'events' | 'signedMedia'>;
+      events?: ApiSessionDetail['events'];
+      signedMedia?: ApiSession['signedMedia'];
+    };
+
+    return {
+      ...data.session,
+      events: Array.isArray(data.events) ? data.events : [],
+      signedMedia: data.signedMedia,
+    };
   }
 
   /**

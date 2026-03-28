@@ -62,17 +62,17 @@ development_status:
   4-1-ingest-and-validate-session-payloads: review
   4-2-provide-searchable-and-filterable-session-retrieval: review
   4-3-support-batch-operations-and-enrichment-metadata: review
-  4-4-enforce-storage-quotas-and-retention-policies: backlog
+  4-4-enforce-storage-quotas-and-retention-policies: review
   epic-4-retrospective: optional
-  epic-5: backlog
-  5-1-enforce-project-key-authentication-and-rate-limits: backlog
-  5-2-encrypt-secrets-and-capture-audit-evidence: backlog
+  epic-5: in-progress
+  5-1-enforce-project-key-authentication-and-rate-limits: review
+  5-2-encrypt-secrets-and-capture-audit-evidence: review
   epic-5-retrospective: optional
-  epic-6: backlog
-  6-1-build-session-list-workflows-for-high-volume-triage: backlog
-  6-2-improve-list-signal-with-severity-and-previews: backlog
-  6-3-provide-detailed-synchronized-replay-workspace: backlog
-  6-4-support-advanced-replay-controls-and-bookmarks: backlog
+  epic-6: in-progress
+  6-1-build-session-list-workflows-for-high-volume-triage: review
+  6-2-improve-list-signal-with-severity-and-previews: review
+  6-3-provide-detailed-synchronized-replay-workspace: review
+  6-4-support-advanced-replay-controls-and-bookmarks: review
   epic-6-retrospective: optional
   epic-7: backlog
   7-1-configure-ai-providers-and-trigger-analysis-safely: backlog

@@ -23,7 +23,7 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 		sessions.Use(middleware.APIKeyAuth(db, cfg))
 		sessions.Use(middleware.RateLimit(cfg))
 		{
-			sessionHandler := handlers.NewSessionHandler(db, minioClient)
+			sessionHandler := handlers.NewSessionHandler(db, minioClient, cfg)
 			sessions.POST("", sessionHandler.Create)
 			sessions.GET("", sessionHandler.List)
 			sessions.PATCH("/batch/tags", sessionHandler.BatchUpdateTags)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bugcatcher/api/internal/config"
 	"github.com/bugcatcher/api/internal/database"
 	"github.com/bugcatcher/api/internal/models"
 	"github.com/bugcatcher/api/internal/storage"
@@ -22,12 +23,14 @@ import (
 type SessionHandler struct {
 	db          *database.Database
 	minioClient *storage.MinIOClient
+	cfg         *config.Config
 }
 
-func NewSessionHandler(db *database.Database, minioClient *storage.MinIOClient) *SessionHandler {
+func NewSessionHandler(db *database.Database, minioClient *storage.MinIOClient, cfg *config.Config) *SessionHandler {
 	return &SessionHandler{
 		db:          db,
 		minioClient: minioClient,
+		cfg:         cfg,
 	}
 }
 
@@ -96,6 +99,19 @@ func (h *SessionHandler) Create(c *gin.Context) {
 
 	// Insert events first so session can persist event references.
 	now := time.Now()
+	storageStatus, err := h.enforceProjectStoragePolicy(c.Request.Context(), payload.ProjectID, now)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Failed to enforce project storage policy",
+			"code":  "STORAGE_POLICY_ERROR",
+			"details": []ValidationIssue{{
+				Field: "project.storagePolicy",
+				Issue: err.Error(),
+			}},
+		})
+		return
+	}
+
 	eventRefs := make([]primitive.ObjectID, 0, len(payload.Events))
 	if len(payload.Events) > 0 {
 		events := make([]interface{}, len(payload.Events))
@@ -169,6 +185,7 @@ func (h *SessionHandler) Create(c *gin.Context) {
 		"sessionId": sessionID,
 		"id":        result.InsertedID,
 		"eventRefs": len(eventRefs),
+		"storage":   storageStatus,
 	})
 }
 
@@ -475,18 +492,11 @@ func (h *SessionHandler) buildSignedMediaURLs(media models.Media) map[string]int
 // @Router /sessions/{id} [delete]
 func (h *SessionHandler) Delete(c *gin.Context) {
 	sessionID := c.Param("id")
+	ctx := c.Request.Context()
 
-	// Delete session
-	result, err := h.db.Sessions.DeleteOne(context.Background(), bson.M{"sessionId": sessionID})
+	var session models.Session
+	err := h.db.Sessions.FindOne(ctx, bson.M{"sessionId": sessionID}).Decode(&session)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to delete session",
-			"code":  "DB_DELETE_ERROR",
-		})
-		return
-	}
-
-	if result.DeletedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "Session not found",
 			"code":  "SESSION_NOT_FOUND",
@@ -494,8 +504,13 @@ func (h *SessionHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	// Delete events
-	h.db.Events.DeleteMany(context.Background(), bson.M{"sessionId": sessionID})
+	if err := h.deleteSessionArtifacts(ctx, session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete session",
+			"code":  "DB_DELETE_ERROR",
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Session deleted successfully",

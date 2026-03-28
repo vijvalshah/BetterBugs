@@ -14,6 +14,7 @@ type Database struct {
 	Sessions *mongo.Collection
 	Events   *mongo.Collection
 	Projects *mongo.Collection
+	AuditLogs *mongo.Collection
 }
 
 func Connect(uri, dbName string) (*Database, error) {
@@ -38,6 +39,7 @@ func Connect(uri, dbName string) (*Database, error) {
 		Sessions: db.Collection("sessions"),
 		Events:   db.Collection("events"),
 		Projects: db.Collection("projects"),
+		AuditLogs: db.Collection("audit_logs"),
 	}, nil
 }
 
