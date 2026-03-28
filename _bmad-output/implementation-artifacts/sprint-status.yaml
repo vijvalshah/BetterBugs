@@ -1,0 +1,106 @@
+# generated: 2026-03-27
+# last_updated: 2026-03-28
+# project: BetterBugs
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-27
+last_updated: 2026-03-28
+project: BetterBugs
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-record-rolling-timeline-before-user-reports: review
+  1-2-collect-network-context-with-timing-fidelity: review
+  1-3-collect-console-and-runtime-failures-consistently: review
+  1-4-provide-future-ready-advanced-capture-extensions: review
+  epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-capture-application-state-with-adapter-model: review
+  2-2-enable-pluggable-state-adapters-for-ecosystem-growth: review
+  2-3-redact-sensitive-data-before-transmission: review
+  2-4-fail-closed-when-redaction-confidence-is-uncertain: review
+  epic-2-retrospective: optional
+  epic-3: in-progress
+  3-1-trigger-capture-through-intuitive-extension-controls: review
+  3-2-provide-capture-preview-queueing-and-project-switching: review
+  epic-3-retrospective: optional
+  epic-4: in-progress
+  4-1-ingest-and-validate-session-payloads: review
+  4-2-provide-searchable-and-filterable-session-retrieval: review
+  4-3-support-batch-operations-and-enrichment-metadata: review
+  4-4-enforce-storage-quotas-and-retention-policies: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  5-1-enforce-project-key-authentication-and-rate-limits: backlog
+  5-2-encrypt-secrets-and-capture-audit-evidence: backlog
+  epic-5-retrospective: optional
+  epic-6: backlog
+  6-1-build-session-list-workflows-for-high-volume-triage: backlog
+  6-2-improve-list-signal-with-severity-and-previews: backlog
+  6-3-provide-detailed-synchronized-replay-workspace: backlog
+  6-4-support-advanced-replay-controls-and-bookmarks: backlog
+  epic-6-retrospective: optional
+  epic-7: backlog
+  7-1-configure-ai-providers-and-trigger-analysis-safely: backlog
+  7-2-present-actionable-root-cause-analysis-in-ui: backlog
+  7-3-extend-ai-depth-with-cost-classification-and-similar-issues: backlog
+  7-4-prepare-ai-for-code-context-and-multi-file-reasoning: backlog
+  epic-7-retrospective: optional
+  epic-8: backlog
+  8-1-create-first-class-github-issue-export-flow: backlog
+  8-2-expand-export-and-sharing-options: backlog
+  8-3-improve-routing-with-labels-assignees-and-notifications: backlog
+  8-4-provide-plugin-pathways-for-ide-and-automation-ecosystems: backlog
+  epic-8-retrospective: optional
+  epic-9: backlog
+  9-1-manage-capture-sanitization-and-integration-settings: backlog
+  9-2-support-team-management-and-billing-ready-controls: backlog
+  epic-9-retrospective: optional
+  epic-10: backlog
+  10-1-link-repository-context-to-session-analysis: backlog
+  10-2-implement-core-mcp-session-toolset: backlog
+  10-3-add-mcp-analysis-and-issue-actions: backlog
+  epic-10-retrospective: optional
+  epic-11: backlog
+  11-1-surface-trend-and-hotspot-analytics: backlog
+  11-2-track-ai-usefulness-over-time: backlog
+  11-3-add-collaboration-primitives-for-investigation-workflow: backlog
+  epic-11-retrospective: optional
+  epic-12: backlog
+  12-1-define-mobile-capture-expansion-scope: backlog
+  12-2-define-enterprise-and-autonomous-remediation-roadmap: backlog
+  epic-12-retrospective: optional

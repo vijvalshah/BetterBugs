@@ -1,25 +1,29 @@
 export type ConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
-export type EventType = 'console' | 'network' | 'error';
+export type EventType = 'console' | 'network' | 'error' | 'state';
 
 export interface ConsoleEventPayload {
   level: ConsoleLevel;
   message: string;
   args?: unknown[];
   stack?: string;
+  sequence?: number;
 }
 
 export interface NetworkEventPayload {
   method: string;
   url: string;
   status: number;
+  graphql?: GraphQLOperationPayload;
   request: {
     headers: Record<string, string>;
     body?: string;
+    truncated?: boolean;
   };
   response: {
     headers: Record<string, string>;
     body?: string;
     size: number;
+    truncated?: boolean;
   };
   timing: {
     start: number;
@@ -31,16 +35,35 @@ export interface NetworkEventPayload {
 export interface ErrorEventPayload {
   message: string;
   stack?: string;
+  sourceMappedStack?: string;
+  sourceMapStatus?: 'mapped' | 'unmapped' | 'resolver-error';
+  type?: string;
+  severity?: 'error' | 'unhandledrejection';
+  sequence?: number;
   source?: string;
   line?: number;
   column?: number;
+}
+
+export interface StateEventPayload {
+  source: 'localStorage' | 'sessionStorage' | 'cookie' | 'redux' | string;
+  data: unknown;
+  changed?: boolean;
+  reason?: 'init' | 'interval' | 'flush' | 'adapter-error';
+  adapterName?: string;
+  errorMessage?: string;
+}
+
+export interface GraphQLOperationPayload {
+  operationType: 'query' | 'mutation' | 'subscription' | 'unknown';
+  operationName?: string;
 }
 
 export interface CaptureEvent {
   id: string;
   type: EventType;
   timestamp: number;
-  payload: ConsoleEventPayload | NetworkEventPayload | ErrorEventPayload;
+  payload: ConsoleEventPayload | NetworkEventPayload | ErrorEventPayload | StateEventPayload;
 }
 
 export interface EnvironmentInfo {
@@ -64,7 +87,16 @@ export interface SessionPayload {
   events: CaptureEvent[];
   media: {
     hasReplay: boolean;
+    metadata?: CaptureMediaMetadata;
   };
+}
+
+export interface CaptureMediaMetadata {
+  resolution: '720p' | '1080p';
+  frameRate: number;
+  bufferWindowMs: number;
+  frozenAt: string;
+  eventCount: number;
 }
 
 export interface ExtensionConfig {
@@ -74,6 +106,10 @@ export interface ExtensionConfig {
   captureNetwork: boolean;
   captureConsole: boolean;
   captureErrors: boolean;
+  captureState: boolean;
+  sanitizationRules?: string[];
+  captureResolution: '720p' | '1080p';
+  captureFrameRate: number;
 }
 
 export const DEFAULT_CONFIG: ExtensionConfig = {
@@ -83,6 +119,9 @@ export const DEFAULT_CONFIG: ExtensionConfig = {
   captureNetwork: true,
   captureConsole: true,
   captureErrors: true,
+  captureState: true,
+  captureResolution: '1080p',
+  captureFrameRate: 30,
 };
 
 export interface BackgroundMessage<T = unknown> {
@@ -96,6 +135,8 @@ export interface BackgroundMessage<T = unknown> {
     | 'BC_STATUS_UPDATE'
     | 'BC_CAPTURE_NOW'
     | 'BC_CAPTURE_RESULT'
-    | 'BC_CONFIG_SAVE';
+    | 'BC_CONFIG_SAVE'
+    | 'BC_CAPTURE_PREVIEW_REQUEST'
+    | 'BC_CAPTURE_PREVIEW_RESPONSE';
   payload?: T;
 }

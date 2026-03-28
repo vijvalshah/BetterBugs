@@ -7,16 +7,16 @@ stepsCompleted:
 	- step-05-epic-quality-review
 	- step-06-final-assessment
 documentsIncluded:
-	prd:
+	prd_equivalent:
 		- _bmad-output/planning-artifacts/feature-specification.md
 	architecture:
 		- _bmad-output/planning-artifacts/architecture.md
 	technical_specification:
 		- _bmad-output/planning-artifacts/technical-specification.md
 	epics:
-		- _bmad-output/planning-artifacts/epics-and-stories.md
+		- _bmad-output/planning-artifacts/epics.md
 	ux:
-		- _bmad-output/planning-artifacts/ux-design.md
+		- _bmad-output/planning-artifacts/ux-design-specification.md
 ---
 
 # Implementation Readiness Assessment Report
@@ -26,18 +26,46 @@ documentsIncluded:
 
 ## Document Discovery
 
-### Selected Inputs For Assessment
+Beginning **Document Discovery** to inventory all project files.
 
-- PRD-equivalent: _bmad-output/planning-artifacts/feature-specification.md
-- Architecture: _bmad-output/planning-artifacts/architecture.md
-- Technical Specification: _bmad-output/planning-artifacts/technical-specification.md
-- Epics and Stories: _bmad-output/planning-artifacts/epics-and-stories.md
-- UX Design: _bmad-output/planning-artifacts/ux-design.md
+## PRD Files Found
 
-### Discovery Notes
+**Whole Documents:**
+- No file matched strict *prd*.md naming pattern.
 
-- Canonical planning set confirmed by user.
-- No whole/sharded duplicate conflicts in selected files.
+**Sharded Documents:**
+- None found.
+
+## Architecture Files Found
+
+**Whole Documents:**
+- _bmad-output/planning-artifacts/architecture.md (7707 bytes, 2026-03-26 21:47:09)
+
+**Sharded Documents:**
+- None found.
+
+## Epics & Stories Files Found
+
+**Whole Documents:**
+- _bmad-output/planning-artifacts/epics.md (23205 bytes, 2026-03-27 19:57:35)
+
+**Sharded Documents:**
+- None found.
+
+## UX Design Files Found
+
+**Whole Documents:**
+- _bmad-output/planning-artifacts/ux-design-specification.md (9041 bytes, 2026-03-27 19:58:51)
+
+**Sharded Documents:**
+- None found.
+
+## Discovery Decision
+
+- Use _bmad-output/planning-artifacts/feature-specification.md as PRD-equivalent requirements source.
+- Use _bmad-output/planning-artifacts/technical-specification.md as technical constraints source.
+- No whole/sharded duplicate conflicts were detected.
+
 ## PRD Analysis
 
 ### Functional Requirements
@@ -190,18 +218,18 @@ FR144 (COL-001): [Phase 3] Discuss sessions Acceptance Criteria: Threaded commen
 FR145 (COL-002): [Phase 3] Share with team Acceptance Criteria: Internal share; permissions
 FR146 (COL-003): [Phase 4] Assign sessions to team member Acceptance Criteria: Dropdown; notifications
 FR147 (COL-004): [Phase 4] Track investigation status Acceptance Criteria: New → Investigating → Resolved
-FR148 (FUT-001): [Future] Capture from iOS apps Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR149 (FUT-002): [Future] Capture from Android apps Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR150 (FUT-003): [Future] React Native bridge Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR151 (FUT-004): [Future] Flutter plugin Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR152 (FUT-005): [Future] Generate actual code fixes Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR153 (FUT-006): [Future] Create PR with suggested fix Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR154 (FUT-007): [Future] Warn before errors occur Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR155 (FUT-008): [Future] Detect unusual patterns Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR156 (FUT-009): [Future] Enterprise authentication Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR157 (FUT-010): [Future] SOC 2, GDPR compliance tools Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR158 (FUT-011): [Future] Granular permissions Acceptance Criteria: No explicit acceptance criteria listed in this table row.
-FR159 (FUT-012): [Future] Automated data lifecycle Acceptance Criteria: No explicit acceptance criteria listed in this table row.
+FR148 (FUT-001): [Future] Capture from iOS apps Acceptance Criteria: 
+FR149 (FUT-002): [Future] Capture from Android apps Acceptance Criteria: 
+FR150 (FUT-003): [Future] React Native bridge Acceptance Criteria: 
+FR151 (FUT-004): [Future] Flutter plugin Acceptance Criteria: 
+FR152 (FUT-005): [Future] Generate actual code fixes Acceptance Criteria: 
+FR153 (FUT-006): [Future] Create PR with suggested fix Acceptance Criteria: 
+FR154 (FUT-007): [Future] Warn before errors occur Acceptance Criteria: 
+FR155 (FUT-008): [Future] Detect unusual patterns Acceptance Criteria: 
+FR156 (FUT-009): [Future] Enterprise authentication Acceptance Criteria: 
+FR157 (FUT-010): [Future] SOC 2, GDPR compliance tools Acceptance Criteria: 
+FR158 (FUT-011): [Future] Granular permissions Acceptance Criteria: 
+FR159 (FUT-012): [Future] Automated data lifecycle Acceptance Criteria: 
 
 Total FRs: 159
 
@@ -210,135 +238,147 @@ Total FRs: 159
 ## Non-Functional Requirements Extracted
 NFR1 (Compatibility): Media capture must work in Chrome, Edge, and Firefox with graceful fallback.
 NFR2 (Capture Quality): Video capture quality must support 720p and 1080p at 30fps with metadata visibility.
-NFR3 (Temporal Fidelity): DOM snapshots must be captured every 5 seconds or on interaction events.
-NFR4 (Network Accuracy): Request timing data must be accurate to 10ms and include DNS and TLS when available.
-NFR5 (Payload Bound): Request and response body capture is capped at 1MB; larger bodies must be noted.
-NFR6 (Privacy Security): Sensitive headers and fields (Authorization, Cookie, API keys, password and token patterns) must be redacted by default.
-NFR7 (Fail Safe Privacy): Data with uncertain sanitization status must be dropped and never transmitted raw.
-NFR8 (Capture Latency): Capture trigger flow should freeze buffer and upload in under 5 seconds.
-NFR9 (Issue Export Latency): Bug report preparation and upload flow targets completion in under 10 seconds.
-NFR10 (API Security): API endpoints must enforce project-key authentication and reject invalid keys.
-NFR11 (Rate Protection): Capture APIs should be rate-limited to 100 requests per minute and AI APIs to 10 requests per minute per project.
-NFR12 (Data Security): Sensitive tokens and keys must be encrypted at rest using AES-256.
-NFR13 (URL Security): Signed URLs for media access should expire in 1 hour and be renewable.
-NFR14 (Usability): Session list and detail interfaces must be responsive and include sortable and filterable workflows.
-NFR15 (Observability): Audit logs must support who, what, and when traceability for access and modification events.
-NFR16 (Reliability): Webhook delivery must support retry logic on failed outbound delivery attempts.
-NFR17 (AI Output Quality): AI summaries should be concise (3 to 5 sentences) and include confidence signaling for root-cause suggestions.
-NFR18 (Scalability): Session indexing, search, and pagination must support growth in sessions and projects.
+NFR3 (Temporal Fidelity): DOM snapshots and event timelines must preserve replay synchronization.
+NFR4 (Network Accuracy): Request timing should maintain 10ms-level fidelity where available.
+NFR5 (Payload Bound): Body capture must cap payload size and safely mark truncation.
+NFR6 (Privacy and Security): Sensitive headers and fields are redacted by default before transmission.
+NFR7 (Fail Closed): Uncertain sanitization outcomes must drop unsafe data.
+NFR8 (Capture Responsiveness): Trigger-to-upload completion should target under 5 seconds for standard captures.
+NFR9 (Export Responsiveness): Session-to-issue export should target under 10 seconds for standard payloads.
+NFR10 (Authentication): API endpoints require project key authentication and reject invalid credentials.
+NFR11 (Rate Limiting): Project-scoped request limiting must protect capture and AI endpoints.
+NFR12 (Encryption): Sensitive credentials and tokens must be encrypted at rest.
+NFR13 (Secure Media Access): Signed URLs must be time-bound and renewable.
+NFR14 (Usability): Dashboard interactions must be responsive with accessible list/detail workflows.
+NFR15 (Auditability): Security-relevant actions must be traceable in audit logs.
+NFR16 (Reliability): Notification and webhook deliveries require retry behavior.
+NFR17 (AI Quality): AI outputs should provide concise actionable guidance with confidence indication.
+NFR18 (Scalability): Search, listing, and storage patterns must support growth across teams and projects.
 
 Total NFRs: 18
 
 ### Additional Requirements
 
-- BYOM support must include OpenAI and Ollama in MVP, with Anthropic and custom endpoints in later phases.
-- GitHub issue integration is MVP; GitLab and Linear are planned for Phase 3.
-- MCP-native capabilities (session tooling for AI IDEs) are required in Phase 4.
-- Delivery is phased by MoSCoW prioritization with explicit Must, Should, Could, and Wont buckets.
-- Future enterprise and mobile capabilities are explicitly deferred and should not block MVP readiness.
+- Architecture requires replaceable interfaces for storage, blobs, and AI provider integrations.
+- Self-hosted deployment with Docker Compose is a non-negotiable delivery constraint.
+- MCP should reuse backend data access contracts to avoid duplicated business logic.
+- Phased delivery must preserve independently deployable value increments.
 
 ### PRD Completeness Assessment
 
-- Completeness: High for functional scope; the document provides exhaustive feature-level requirements with acceptance criteria.
-- Clarity: Moderate to high; many requirements are implementation-ready, but several Future rows omit explicit acceptance criteria.
-- Traceability risk: The PRD-equivalent is feature-centric rather than FR and NFR indexed, so explicit mapping to epics is required in the next step.
-- Readiness conclusion (PRD only): Sufficient to proceed to epic coverage validation with a formal traceability matrix.
+- Completeness: High. Functional scope is extensive and acceptance-oriented.
+- Clarity: Moderate-high. Most requirements are actionable, with some future items less specified.
+- Traceability need: Explicit FR-to-epic mapping is essential and now available in epics.md.
+- Step outcome: Ready to perform epic coverage validation.
 
 ## Epic Coverage Validation
 
 ### Epic FR Coverage Extracted
 
-- Epics source expected: _bmad-output/planning-artifacts/epics-and-stories.md
-- Current status: Not found
-- Total FRs in epics: 0
+FR1-FR7: Covered in Epic 1 (Stories 1.1-1.3)
+FR8-FR15: Covered in Epic 1 (Stories 1.2, 1.4)
+FR16-FR21: Covered in Epic 1 (Stories 1.3, 1.4)
+FR22-FR28: Covered in Epic 2 (Stories 2.1, 2.2)
+FR29-FR36: Covered in Epic 2 (Stories 2.3, 2.4)
+FR37-FR44: Covered in Epic 3 (Stories 3.1, 3.2)
+FR45-FR50: Covered in Epic 4 (Stories 4.1, 4.2)
+FR51-FR57: Covered in Epic 4 (Story 4.3)
+FR58-FR61: Covered in Epic 4 (Stories 4.2, 4.4)
+FR62-FR65: Covered in Epic 5 (Stories 5.1, 5.2)
+FR66-FR73: Covered in Epic 6 (Stories 6.1, 6.2)
+FR74-FR82: Covered in Epic 6 (Stories 6.3, 6.4)
+FR83-FR89: Covered in Epic 7 (Stories 7.1, 7.2)
+FR90-FR95: Covered in Epic 8 (Stories 8.1, 8.2)
+FR96-FR101: Covered in Epic 9 (Stories 9.1, 9.2)
+FR102-FR109: Covered in Epic 7 (Stories 7.1, 7.3)
+FR110-FR115: Covered in Epic 7 (Stories 7.3, 7.4)
+FR116-FR119: Covered in Epic 10 (Stories 10.1, 10.2)
+FR120-FR125: Covered in Epic 8 (Stories 8.1, 8.3)
+FR126-FR131: Covered in Epic 8 (Story 8.4)
+FR132-FR138: Covered in Epic 10 (Stories 10.2, 10.3)
+FR139-FR143: Covered in Epic 11 (Stories 11.1, 11.2)
+FR144-FR147: Covered in Epic 11 (Story 11.3)
+FR148-FR159: Covered in Epic 12 (Stories 12.1, 12.2)
+
+Total FRs in epics: 159
 
 ### Coverage Matrix
 
 | FR Number | PRD Requirement | Epic Coverage | Status |
 | --------- | --------------- | ------------- | ------ |
-| FR1-FR159 | Feature-specification functional requirements set | NOT FOUND (Epics document missing) | MISSING |
+| FR1-FR159 | Feature-specification functional requirements set | Epic 1 through Epic 12 mapped in FR Coverage Map | Covered |
 
 ### Missing Requirements
 
-- All extracted PRD functional requirements (FR1 through FR159) are currently untraced to epics and stories.
-- Critical impact: There is no implementation traceability from requirements to delivery units.
-- Recommendation: Create a canonical epics and stories document with explicit FR-to-epic mapping before implementation starts.
+- No missing FRs found.
+- No extra FRs claimed in epics outside PRD range FR1-FR159.
 
 ### Coverage Statistics
 
 - Total PRD FRs: 159
-- FRs covered in epics: 0
-- Coverage percentage: 0%
+- FRs covered in epics: 159
+- Coverage percentage: 100%
 
 ## UX Alignment Assessment
 
 ### UX Document Status
 
-- UX source search in planning artifacts: Not found
-- Whole UX doc pattern: no match
-- Sharded UX index pattern: no match
+- Found: _bmad-output/planning-artifacts/ux-design-specification.md
 
 ### Alignment Issues
 
-- PRD-equivalent clearly implies user-facing UX across extension popup, dashboard list/detail pages, AI analysis panels, and export flows.
-- Architecture includes user-facing surfaces (browser extension + dashboard), but no dedicated UX spec is available for journey-level validation.
-- Without UX documentation, alignment between intended user journeys and technical delivery cannot be validated.
+- No critical UX to PRD misalignment detected for MVP and near-term flows.
+- UX journeys J1/J2/J3 align with capture, triage, and settings requirements from feature and architecture artifacts.
+- Architecture component model (extension, API, storage, dashboard, AI/MCP) supports defined UX surfaces and interaction flows.
 
 ### Warnings
 
-- UX is implied by both feature and architecture artifacts; missing UX documentation is a readiness warning.
-- Recommended action: create UX design documentation with key user journeys, IA, and acceptance criteria aligned to PRD and architecture.
+- Future feature families (mobile and enterprise) are only lightly represented in current UX scope; add dedicated future-state UX artifacts before those phases begin.
+- Performance and accessibility requirements are documented in UX spec; enforce them as measurable gates in implementation and test plans.
 
 ## Epic Quality Review
 
-### Review Basis
-
-- Expected input: _bmad-output/planning-artifacts/epics-and-stories.md
-- Actual status: Not found
-- Review mode: Structural readiness failure assessment (artifact-missing)
-
 ### Critical Violations
 
-- Missing epics and stories document blocks all quality checks for user-value framing, epic independence, and story-level execution readiness.
-- Forward-dependency validation cannot be performed without explicit story sequencing.
-- Acceptance criteria quality validation cannot be performed without story content.
+- None found.
 
 ### Major Issues
 
-- No FR-to-story traceability artifact exists, so implementation scope cannot be controlled.
-- Story sizing and dependency risks are unknown and therefore high risk at implementation start.
+- Acceptance criteria quality is inconsistent: many stories use broad outcomes without measurable thresholds or explicit failure-path conditions.
+- Greenfield implementation readiness is under-specified: no dedicated early story clearly establishes repository bootstrap, environment baseline, and CI guardrails.
+- Data-lifecycle implementation specifics (schema migration timing and table/entity creation sequencing) are not explicitly decomposed at story level.
 
 ### Minor Concerns
 
-- N/A due missing core artifact.
+- Some stories combine strategic and implementation intents, making story sizing uneven for sprint-level execution.
+- Future-track epics (Epic 12) are planning-heavy and may need decomposition before entering an implementation sprint.
 
 ### Remediation Guidance
 
-- Create a canonical epics and stories document and keep it in planning artifacts.
-- Add explicit FR coverage mapping from FR1-FR159 to epics and stories.
-- Ensure each story has independently testable acceptance criteria and no forward dependencies.
+- Add measurable acceptance thresholds per story (performance bounds, explicit error handling, observable completion signals).
+- Introduce a concrete bootstrap story in early implementation flow for environment setup, baseline quality gates, and delivery pipeline initialization.
+- Add explicit data migration and lifecycle stories where persistence behavior changes across phases.
 
 ## Summary and Recommendations
 
 ### Overall Readiness Status
 
-NOT READY
+NEEDS WORK
 
 ### Critical Issues Requiring Immediate Action
 
-- Missing epics and stories artifact prevents FR traceability and implementation sequencing.
-- Epic coverage is currently 0% against extracted PRD functional requirements.
-- Missing UX documentation leaves user-journey and architecture-to-UX alignment unvalidated.
+- No critical blockers remain for document completeness or FR traceability.
+- Immediate action is still required on story-level quality to reduce implementation ambiguity (acceptance criteria specificity, bootstrap readiness, and data-lifecycle decomposition).
 
 ### Recommended Next Steps
 
-1. Create and approve a canonical epics and stories document with explicit mapping from FR1-FR159 to epic and story IDs.
-2. Create and approve a UX design document aligned to the feature and architecture artifacts (primary journeys, IA, key screen behaviors, and UX acceptance criteria).
-3. Re-run implementation readiness once epics and UX artifacts exist, then proceed to sprint planning only if coverage and quality checks pass.
+1. Tighten acceptance criteria for all implementation-phase stories with measurable pass/fail conditions and explicit failure handling.
+2. Add an explicit early bootstrap story (environment setup, baseline CI checks, and project scaffolding readiness).
+3. Add specific persistence and migration stories for phased data lifecycle changes, then run readiness once more for final sign-off.
 
 ### Final Note
 
-This assessment identified 8 issues across 4 categories (artifact availability, traceability, UX alignment, and epic quality validation). Address the critical issues before proceeding to implementation. These findings can be used to improve the artifacts or you may choose to proceed as-is with explicit risk acceptance.
+This assessment identified 5 issues across 3 categories (story quality specificity, implementation bootstrap readiness, and data lifecycle decomposition). Address these issues before execution lock for Sprint 1. Current artifacts are significantly improved and can proceed to sprint planning with these remediation actions tracked as prerequisites.
 
 ### Assessment Metadata
 

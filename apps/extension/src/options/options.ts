@@ -9,12 +9,14 @@ const projectKeyInput = document.getElementById('projectKey') as HTMLInputElemen
 const captureNetworkInput = document.getElementById('captureNetwork') as HTMLInputElement;
 const captureConsoleInput = document.getElementById('captureConsole') as HTMLInputElement;
 const captureErrorsInput = document.getElementById('captureErrors') as HTMLInputElement;
+let lastLoadedConfig: ExtensionConfig = { ...DEFAULT_CONFIG };
 
 function setStatus(text: string): void {
   statusEl.textContent = text;
 }
 
 function fillForm(config: ExtensionConfig): void {
+  lastLoadedConfig = { ...config };
   apiBaseUrlInput.value = config.apiBaseUrl;
   projectIdInput.value = config.projectId;
   projectKeyInput.value = config.projectKey;
@@ -39,6 +41,10 @@ form.addEventListener('submit', async (event) => {
     captureNetwork: captureNetworkInput.checked,
     captureConsole: captureConsoleInput.checked,
     captureErrors: captureErrorsInput.checked,
+    captureState: DEFAULT_CONFIG.captureState,
+    sanitizationRules: lastLoadedConfig.sanitizationRules,
+    captureResolution: DEFAULT_CONFIG.captureResolution,
+    captureFrameRate: DEFAULT_CONFIG.captureFrameRate,
   };
 
   try {

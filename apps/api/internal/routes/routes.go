@@ -26,6 +26,9 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 			sessionHandler := handlers.NewSessionHandler(db, minioClient)
 			sessions.POST("", sessionHandler.Create)
 			sessions.GET("", sessionHandler.List)
+			sessions.PATCH("/batch/tags", sessionHandler.BatchUpdateTags)
+			sessions.PATCH("/:id/tags", sessionHandler.UpdateTags)
+			sessions.POST("/:id/comments", sessionHandler.AddComment)
 			sessions.GET("/:id", sessionHandler.GetByID)
 			sessions.DELETE("/:id", sessionHandler.Delete)
 		}

@@ -18,10 +18,28 @@ type Session struct {
 	App         App                `json:"app,omitempty" bson:"app,omitempty"`
 	Error       *ErrorInfo         `json:"error,omitempty" bson:"error,omitempty"`
 	Media       Media              `json:"media" bson:"media"`
+	Tags        []string           `json:"tags,omitempty" bson:"tags,omitempty"`
+	Comments    []SessionComment   `json:"comments,omitempty" bson:"comments,omitempty"`
+	Operations  []SessionOperation `json:"operations,omitempty" bson:"operations,omitempty"`
+	EventRefs   []primitive.ObjectID `json:"eventRefs,omitempty" bson:"eventRefs,omitempty"`
 	Stats       Stats              `json:"stats" bson:"stats"`
 	UserID      string             `json:"userId,omitempty" bson:"userId,omitempty"`
 	CreatedAt   time.Time          `json:"createdAt" bson:"createdAt"`
 	UpdatedAt   time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+type SessionComment struct {
+	ID        string    `json:"id" bson:"id"`
+	Author    string    `json:"author,omitempty" bson:"author,omitempty"`
+	Body      string    `json:"body" bson:"body"`
+	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
+}
+
+type SessionOperation struct {
+	Action    string                 `json:"action" bson:"action"`
+	Actor     string                 `json:"actor,omitempty" bson:"actor,omitempty"`
+	At        time.Time              `json:"at" bson:"at"`
+	Details   map[string]interface{} `json:"details,omitempty" bson:"details,omitempty"`
 }
 
 type Environment struct {
@@ -88,5 +106,8 @@ type SessionSummary struct {
 	Timestamp time.Time          `json:"timestamp"`
 	Error     *ErrorInfo         `json:"error,omitempty"`
 	Stats     Stats              `json:"stats"`
+	Tags      []string           `json:"tags,omitempty"`
+	CommentCount int             `json:"commentCount"`
+	Media     Media              `json:"media"`
 	CreatedAt time.Time          `json:"createdAt"`
 }

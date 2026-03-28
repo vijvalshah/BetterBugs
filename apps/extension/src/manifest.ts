@@ -9,6 +9,15 @@ const manifest = defineManifest({
     default_popup: 'src/popup/index.html',
     default_title: 'BugCatcher',
   },
+  commands: {
+    trigger_capture: {
+      suggested_key: {
+        default: 'Ctrl+Shift+B',
+        mac: 'Command+Shift+B',
+      },
+      description: 'Trigger BugCatcher capture',
+    },
+  },
   permissions: ['storage', 'activeTab', 'scripting'],
   host_permissions: ['<all_urls>'],
   background: {
