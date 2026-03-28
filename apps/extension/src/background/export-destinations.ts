@@ -4,6 +4,7 @@ import type {
   ExportDestination,
   GitLabExportConfig,
   LinearExportConfig,
+  RoutingConfig,
   ShareLinkConfig,
   ShareLinkPermission,
 } from '../shared/types';
@@ -25,6 +26,13 @@ export interface ExportArtifactResult {
   permission?: ShareLinkPermission;
   expiresAt?: string;
   metadata: Record<string, string | number | boolean>;
+  routing?: RoutingRecommendation;
+}
+
+export interface RoutingRecommendation {
+  labels: string[];
+  assignees: string[];
+  reasons: string[];
 }
 
 function splitCsv(input: string): string[] {
@@ -42,6 +50,168 @@ function splitCsvToNumbers(input: string): number[] {
 
 function truncate(input: string, maxLength: number): string {
   return input.length > maxLength ? `${input.slice(0, maxLength - 3)}...` : input;
+}
+
+function normalizeRoutingToken(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._:/-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function parseRoutingRuleEntries(input: string): Array<{ pattern: string; values: string[] }> {
+  return input
+    .split(/\r?\n|,/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => {
+      const separator = entry.includes('=>') ? '=>' : ':';
+      const separatorIndex = entry.indexOf(separator);
+      if (separatorIndex <= 0) {
+        return null;
+      }
+
+      const pattern = entry.slice(0, separatorIndex).trim().toLowerCase();
+      const rawValue = entry.slice(separatorIndex + separator.length).trim();
+      const values = rawValue
+        .split('|')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+
+      if (!pattern || values.length === 0) {
+        return null;
+      }
+
+      return { pattern, values };
+    })
+    .filter((entry): entry is { pattern: string; values: string[] } => Boolean(entry));
+}
+
+function uniqueValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    result.push(value);
+  }
+
+  return result;
+}
+
+function mergeCsv(baseValue: string, additions: string[]): string {
+  return uniqueValues([...splitCsv(baseValue), ...additions.map((item) => item.trim()).filter(Boolean)]).join(',');
+}
+
+function computeSeverityLevel(session: ApiSessionDetail): 'critical' | 'high' | 'medium' | 'low' {
+  let score = 0;
+  if (session.error) {
+    score += 60;
+  }
+  score += Math.min(session.stats.consoleCount, 50) * 0.4;
+  score += Math.min(session.stats.networkCount, 50) * 0.25;
+  score += Math.min(session.stats.stateSnapshots, 30) * 0.2;
+
+  if (score >= 85) {
+    return 'critical';
+  }
+
+  if (score >= 60) {
+    return 'high';
+  }
+
+  if (score >= 35) {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
+export function buildRoutingRecommendation(
+  config: RoutingConfig,
+  session: ApiSessionDetail,
+  analysis?: ExportAnalysisHint,
+): RoutingRecommendation {
+  if (!config.enabled) {
+    return {
+      labels: [],
+      assignees: [],
+      reasons: [],
+    };
+  }
+
+  const labels = new Set<string>();
+  const assignees = new Set<string>();
+  const reasons: string[] = [];
+
+  labels.add('bug');
+  labels.add(`severity:${computeSeverityLevel(session)}`);
+
+  if (analysis?.classification?.trim()) {
+    const token = normalizeRoutingToken(analysis.classification);
+    if (token) {
+      labels.add(`classification:${token}`);
+      reasons.push(`classification:${token}`);
+    }
+  }
+
+  if (session.error?.type) {
+    const token = normalizeRoutingToken(session.error.type);
+    if (token) {
+      labels.add(`error:${token}`);
+    }
+  }
+
+  const context = [
+    session.url,
+    session.title,
+    session.error?.message,
+    session.error?.type,
+    analysis?.summary,
+    analysis?.rootCause,
+    analysis?.classification,
+    ...(analysis?.suggestedFiles || []),
+  ]
+    .filter((item): item is string => typeof item === 'string' && item.length > 0)
+    .join(' ')
+    .toLowerCase();
+
+  for (const rule of parseRoutingRuleEntries(config.labelRules)) {
+    if (!context.includes(rule.pattern)) {
+      continue;
+    }
+
+    for (const value of rule.values) {
+      const token = normalizeRoutingToken(value);
+      if (token) {
+        labels.add(token);
+      }
+    }
+    reasons.push(`label-rule:${rule.pattern}`);
+  }
+
+  for (const rule of parseRoutingRuleEntries(config.ownershipRules)) {
+    if (!context.includes(rule.pattern)) {
+      continue;
+    }
+
+    for (const value of rule.values) {
+      assignees.add(value);
+    }
+    reasons.push(`owner-rule:${rule.pattern}`);
+  }
+
+  return {
+    labels: Array.from(labels.values()),
+    assignees: Array.from(assignees.values()),
+    reasons: uniqueValues(reasons),
+  };
 }
 
 function normalizeErrorSummary(session: ApiSessionDetail): string {
@@ -413,8 +583,19 @@ export async function createExportArtifact(
   analysis?: ExportAnalysisHint,
   shareOptions?: { permission?: ShareLinkPermission; expiresInHours?: number },
 ): Promise<ExportArtifactResult> {
+  const routing = buildRoutingRecommendation(config.routing, session, analysis);
+
   if (destination === 'github') {
-    const issue = await createGitHubIssue(config.github, session, analysis);
+    const issue = await createGitHubIssue(
+      {
+        ...config.github,
+        labels: mergeCsv(config.github.labels, routing.labels),
+        assignees: mergeCsv(config.github.assignees, routing.assignees),
+      },
+      session,
+      analysis,
+    );
+
     return {
       destination: 'github',
       artifactUrl: issue.issueUrl,
@@ -425,17 +606,59 @@ export async function createExportArtifact(
         repo: config.github.repo,
         labels: config.github.labels,
         assignees: config.github.assignees,
+        routingLabels: routing.labels.join(','),
+        routingAssignees: routing.assignees.join(','),
+        routingReasons: routing.reasons.join(' | '),
       },
+      routing,
     };
   }
 
   if (destination === 'gitlab') {
-    return await createGitLabIssue(config.gitlab, session, analysis);
+    const artifact = await createGitLabIssue(
+      {
+        ...config.gitlab,
+        labels: mergeCsv(config.gitlab.labels, routing.labels),
+      },
+      session,
+      analysis,
+    );
+
+    return {
+      ...artifact,
+      metadata: {
+        ...artifact.metadata,
+        routingLabels: routing.labels.join(','),
+        routingAssignees: routing.assignees.join(','),
+        routingReasons: routing.reasons.join(' | '),
+      },
+      routing,
+    };
   }
 
   if (destination === 'linear') {
-    return await createLinearIssue(config.linear, session, analysis);
+    const artifact = await createLinearIssue(config.linear, session, analysis);
+    return {
+      ...artifact,
+      metadata: {
+        ...artifact.metadata,
+        routingLabels: routing.labels.join(','),
+        routingAssignees: routing.assignees.join(','),
+        routingReasons: routing.reasons.join(' | '),
+      },
+      routing,
+    };
   }
 
-  return createShareLinkArtifact(config.shareLinks, config.apiBaseUrl, session.sessionId, shareOptions);
+  const shareArtifact = createShareLinkArtifact(config.shareLinks, config.apiBaseUrl, session.sessionId, shareOptions);
+  return {
+    ...shareArtifact,
+    metadata: {
+      ...shareArtifact.metadata,
+      routingLabels: routing.labels.join(','),
+      routingAssignees: routing.assignees.join(','),
+      routingReasons: routing.reasons.join(' | '),
+    },
+    routing,
+  };
 }

@@ -81,6 +81,11 @@ type ReplayState = {
     permission?: ShareLinkPermission;
     expiresAt?: string;
     auditId?: string;
+    routingLabels?: string[];
+    routingAssignees?: string[];
+    routingReasons?: string[];
+    notificationSummary?: string;
+    notificationFailures?: number;
   }>>;
   sharePermission: ShareLinkPermission;
   shareExpiryHours: number;
@@ -473,11 +478,28 @@ function renderExportPanel(): void {
       const titleLabel = artifact?.title || '';
       const expiresLabel = artifact?.expiresAt ? ` | expires ${new Date(artifact.expiresAt).toLocaleString()}` : '';
       const permissionLabel = artifact?.permission ? ` | ${artifact.permission}` : '';
+      const routingLabels = (artifact?.routingLabels || []).join(', ');
+      const routingAssignees = (artifact?.routingAssignees || []).join(', ');
+      const routingReasons = (artifact?.routingReasons || []).join(' | ');
+      const routingSummary = [
+        routingLabels ? `labels=${routingLabels}` : '',
+        routingAssignees ? `assignees=${routingAssignees}` : '',
+      ]
+        .filter((entry) => entry.length > 0)
+        .join(' | ');
+      const notificationSummary = artifact?.notificationSummary || 'disabled';
+      const notificationFailures = typeof artifact?.notificationFailures === 'number'
+        ? artifact.notificationFailures
+        : 0;
       return `
         <div class="workspace-list-item"><strong>${escapeHtml(formatDestinationLabel(destination))}:</strong> ${escapeHtml(idLabel)} ${escapeHtml(titleLabel)}${escapeHtml(permissionLabel)}${escapeHtml(expiresLabel)}</div>
         <div class="workspace-list-item"><a href="${escapeHtml(artifact?.url || '')}" target="_blank" rel="noreferrer">${escapeHtml(
           artifact?.url || '',
         )}</a></div>
+        <div class="workspace-list-item"><strong>Routing:</strong> ${escapeHtml(routingSummary || 'none')}</div>
+        <div class="workspace-list-item"><strong>Routing Reasons:</strong> ${escapeHtml(routingReasons || 'none')}</div>
+        <div class="workspace-list-item"><strong>Notifications:</strong> ${escapeHtml(notificationSummary)}</div>
+        <div class="workspace-list-item"><strong>Notification Failures:</strong> ${escapeHtml(String(notificationFailures))}</div>
         <div class="workspace-list-item"><button class="bookmark-chip" data-action="copy-destination-url" data-artifact-url="${escapeHtml(
           artifact?.url || '',
         )}" data-destination="${escapeHtml(destination)}">Copy ${escapeHtml(formatDestinationLabel(destination))} URL</button></div>
@@ -528,6 +550,11 @@ async function runDestinationExportForCurrentSession(destination: ExportDestinat
       permission?: ShareLinkPermission;
       expiresAt?: string;
       auditId?: string;
+      routingLabels?: string[];
+      routingAssignees?: string[];
+      routingReasons?: string[];
+      notificationSummary?: string;
+      notificationFailures?: number;
     };
 
     if (!payload.ok || !payload.artifactUrl) {
@@ -547,6 +574,11 @@ async function runDestinationExportForCurrentSession(destination: ExportDestinat
       permission: payload.permission,
       expiresAt: payload.expiresAt,
       auditId: payload.auditId,
+      routingLabels: payload.routingLabels,
+      routingAssignees: payload.routingAssignees,
+      routingReasons: payload.routingReasons,
+      notificationSummary: payload.notificationSummary,
+      notificationFailures: payload.notificationFailures,
     };
     renderExportPanel();
   } catch (error: unknown) {
@@ -652,6 +684,8 @@ async function loadConfig(): Promise<void> {
       gitlab: { ...DEFAULT_CONFIG.gitlab, ...(config.gitlab || {}) },
       linear: { ...DEFAULT_CONFIG.linear, ...(config.linear || {}) },
       shareLinks: { ...DEFAULT_CONFIG.shareLinks, ...(config.shareLinks || {}) },
+      routing: { ...DEFAULT_CONFIG.routing, ...(config.routing || {}) },
+      notifications: { ...DEFAULT_CONFIG.notifications, ...(config.notifications || {}) },
     };
     const keyState = config.projectKey ? 'set' : 'missing';
     const aiState = currentConfig.ai.enabled
@@ -665,7 +699,11 @@ async function loadConfig(): Promise<void> {
     const shareState = currentConfig.shareLinks.enabled
       ? `${currentConfig.shareLinks.defaultPermission}/${currentConfig.shareLinks.defaultExpiryHours}h`
       : 'disabled';
-    configSummaryEl.textContent = `API: ${config.apiBaseUrl} | Project: ${config.projectId} | Key: ${keyState} | AI: ${aiState} | GH: ${ghState} | GL: ${glState} | Linear: ${linearState} | Share: ${shareState}`;
+    const routingState = currentConfig.routing.enabled ? 'enabled' : 'disabled';
+    const notificationState = currentConfig.notifications.enabled
+      ? `enabled/${currentConfig.notifications.maxRetries} retries`
+      : 'disabled';
+    configSummaryEl.textContent = `API: ${config.apiBaseUrl} | Project: ${config.projectId} | Key: ${keyState} | AI: ${aiState} | GH: ${ghState} | GL: ${glState} | Linear: ${linearState} | Share: ${shareState} | Routing: ${routingState} | Notify: ${notificationState}`;
   } catch {
     currentConfig = { ...DEFAULT_CONFIG };
     configSummaryEl.textContent = 'Config unavailable. Reload extension and retry.';

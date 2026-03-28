@@ -152,6 +152,20 @@ export interface ShareLinkConfig {
   requireAuth: boolean;
 }
 
+export interface RoutingConfig {
+  enabled: boolean;
+  ownershipRules: string;
+  labelRules: string;
+}
+
+export interface NotificationConfig {
+  enabled: boolean;
+  slackWebhookUrl: string;
+  webhookUrl: string;
+  maxRetries: number;
+  retryBackoffMs: number;
+}
+
 export type ExportDestination = 'github' | 'gitlab' | 'linear' | 'share-link';
 
 export interface ExtensionConfig {
@@ -170,6 +184,8 @@ export interface ExtensionConfig {
   gitlab: GitLabExportConfig;
   linear: LinearExportConfig;
   shareLinks: ShareLinkConfig;
+  routing: RoutingConfig;
+  notifications: NotificationConfig;
 }
 
 export const DEFAULT_CONFIG: ExtensionConfig = {
@@ -225,6 +241,18 @@ export const DEFAULT_CONFIG: ExtensionConfig = {
     defaultPermission: 'viewer',
     defaultExpiryHours: 72,
     requireAuth: true,
+  },
+  routing: {
+    enabled: true,
+    ownershipRules: '',
+    labelRules: '',
+  },
+  notifications: {
+    enabled: false,
+    slackWebhookUrl: '',
+    webhookUrl: '',
+    maxRetries: 3,
+    retryBackoffMs: 1000,
   },
 };
 
