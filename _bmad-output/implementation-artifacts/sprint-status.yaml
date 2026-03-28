@@ -80,9 +80,9 @@ development_status:
   7-3-extend-ai-depth-with-cost-classification-and-similar-issues: review
   7-4-prepare-ai-for-code-context-and-multi-file-reasoning: review
   epic-7-retrospective: optional
-  epic-8: backlog
-  8-1-create-first-class-github-issue-export-flow: backlog
-  8-2-expand-export-and-sharing-options: backlog
+  epic-8: in-progress
+  8-1-create-first-class-github-issue-export-flow: review
+  8-2-expand-export-and-sharing-options: review
   8-3-improve-routing-with-labels-assignees-and-notifications: backlog
   8-4-provide-plugin-pathways-for-ide-and-automation-ecosystems: backlog
   epic-8-retrospective: optional

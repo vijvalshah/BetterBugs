@@ -1,4 +1,10 @@
-import { DEFAULT_CONFIG, type BackgroundMessage, type ExtensionConfig } from '../shared/types';
+import {
+  DEFAULT_CONFIG,
+  type BackgroundMessage,
+  type ExtensionConfig,
+  type ExportDestination,
+  type ShareLinkPermission,
+} from '../shared/types';
 import type { ApiSession, ApiSessionDetail } from '../shared/api-client';
 
 const captureButton = document.getElementById('captureButton') as HTMLButtonElement;
@@ -66,6 +72,18 @@ type ReplayState = {
   compareAnalysisId?: string;
   includeCodeContext: boolean;
   modelOverride: string;
+  exportStatus: Record<ExportDestination, 'idle' | 'running' | 'completed' | 'failed'>;
+  exportMessage: Record<ExportDestination, string>;
+  exportArtifacts: Partial<Record<ExportDestination, {
+    url: string;
+    id?: string;
+    title?: string;
+    permission?: ShareLinkPermission;
+    expiresAt?: string;
+    auditId?: string;
+  }>>;
+  sharePermission: ShareLinkPermission;
+  shareExpiryHours: number;
 };
 
 type AiCodeContextFile = {
@@ -369,6 +387,177 @@ function renderAiStatusPanel(): void {
   resultEl.innerHTML = renderAiResultHtml(replayState.aiResult);
 }
 
+function buildExportAnalysisHint(): {
+  summary?: string;
+  rootCause?: string;
+  classification?: string;
+  actions?: string[];
+  suggestedFiles?: string[];
+} {
+  const active = getActiveAnalysis();
+  if (!active) {
+    return {};
+  }
+
+  return {
+    summary: active.summary,
+    rootCause: active.rootCause,
+    classification: active.classification,
+    actions: active.actions,
+    suggestedFiles: active.suggestedFiles,
+  };
+}
+
+function formatDestinationLabel(destination: ExportDestination): string {
+  if (destination === 'github') {
+    return 'GitHub';
+  }
+  if (destination === 'gitlab') {
+    return 'GitLab';
+  }
+  if (destination === 'linear') {
+    return 'Linear';
+  }
+  return 'Share Link';
+}
+
+function renderExportPanel(): void {
+  if (!replayState) {
+    return;
+  }
+
+  const statusEl = sessionDetailEl.querySelector('#destinationExportStatus') as HTMLDivElement | null;
+  const resultEl = sessionDetailEl.querySelector('#destinationExportResult') as HTMLDivElement | null;
+  const sharePermissionEl = sessionDetailEl.querySelector('#sharePermission') as HTMLSelectElement | null;
+  const shareExpiryEl = sessionDetailEl.querySelector('#shareExpiryHours') as HTMLInputElement | null;
+  const triggerButtons = Array.from(
+    sessionDetailEl.querySelectorAll('[data-action="run-destination-export"]'),
+  ) as HTMLButtonElement[];
+  if (!statusEl || !resultEl) {
+    return;
+  }
+
+  if (sharePermissionEl) {
+    sharePermissionEl.value = replayState.sharePermission;
+  }
+
+  if (shareExpiryEl) {
+    shareExpiryEl.value = String(replayState.shareExpiryHours);
+  }
+
+  for (const triggerButton of triggerButtons) {
+    const destination = triggerButton.dataset.destination as ExportDestination | undefined;
+    if (!destination) {
+      continue;
+    }
+    triggerButton.disabled = replayState.exportStatus[destination] === 'running';
+  }
+
+  const statusLines = (['github', 'gitlab', 'linear', 'share-link'] as ExportDestination[])
+    .map((destination) => `${formatDestinationLabel(destination)}: ${replayState.exportMessage[destination]}`)
+    .join(' | ');
+  statusEl.textContent = statusLines;
+
+  const artifactEntries = (['github', 'gitlab', 'linear', 'share-link'] as ExportDestination[])
+    .map((destination) => ({ destination, artifact: replayState.exportArtifacts[destination] }))
+    .filter((entry) => Boolean(entry.artifact?.url));
+
+  if (artifactEntries.length === 0) {
+    resultEl.innerHTML = '<div class="workspace-list-item">Export a session to GitHub, GitLab, Linear, or create a share link.</div>';
+    return;
+  }
+
+  resultEl.innerHTML = artifactEntries
+    .map(({ destination, artifact }) => {
+      const idLabel = artifact?.id ? `#${artifact.id}` : '';
+      const titleLabel = artifact?.title || '';
+      const expiresLabel = artifact?.expiresAt ? ` | expires ${new Date(artifact.expiresAt).toLocaleString()}` : '';
+      const permissionLabel = artifact?.permission ? ` | ${artifact.permission}` : '';
+      return `
+        <div class="workspace-list-item"><strong>${escapeHtml(formatDestinationLabel(destination))}:</strong> ${escapeHtml(idLabel)} ${escapeHtml(titleLabel)}${escapeHtml(permissionLabel)}${escapeHtml(expiresLabel)}</div>
+        <div class="workspace-list-item"><a href="${escapeHtml(artifact?.url || '')}" target="_blank" rel="noreferrer">${escapeHtml(
+          artifact?.url || '',
+        )}</a></div>
+        <div class="workspace-list-item"><button class="bookmark-chip" data-action="copy-destination-url" data-artifact-url="${escapeHtml(
+          artifact?.url || '',
+        )}" data-destination="${escapeHtml(destination)}">Copy ${escapeHtml(formatDestinationLabel(destination))} URL</button></div>
+      `;
+    })
+    .join('');
+}
+
+async function runDestinationExportForCurrentSession(destination: ExportDestination): Promise<void> {
+  if (!replayState) {
+    return;
+  }
+
+  const sharePermission = replayState.sharePermission;
+  const shareExpiryHours = replayState.shareExpiryHours;
+
+  replayState.exportStatus[destination] = 'running';
+  replayState.exportMessage[destination] = `Exporting ${formatDestinationLabel(destination)} artifact...`;
+  renderExportPanel();
+
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>(
+      {
+        type: 'BC_EXPORT_DESTINATION_REQUEST',
+        payload: {
+          destination,
+          sessionId: replayState.session.sessionId,
+          analysis: buildExportAnalysisHint(),
+          shareOptions:
+            destination === 'share-link'
+              ? {
+                permission: sharePermission,
+                expiresInHours: shareExpiryHours,
+              }
+              : undefined,
+        },
+      },
+      30_000,
+    );
+
+    const payload = (response.payload ?? {}) as {
+      ok?: boolean;
+      message?: string;
+      destination?: ExportDestination;
+      artifactUrl?: string;
+      artifactId?: string;
+      artifactTitle?: string;
+      permission?: ShareLinkPermission;
+      expiresAt?: string;
+      auditId?: string;
+    };
+
+    if (!payload.ok || !payload.artifactUrl) {
+      replayState.exportStatus[destination] = 'failed';
+      replayState.exportMessage[destination] = payload.message || `${formatDestinationLabel(destination)} export failed.`;
+      replayState.exportArtifacts[destination] = undefined;
+      renderExportPanel();
+      return;
+    }
+
+    replayState.exportStatus[destination] = 'completed';
+    replayState.exportMessage[destination] = payload.message || `${formatDestinationLabel(destination)} export completed.`;
+    replayState.exportArtifacts[destination] = {
+      url: payload.artifactUrl,
+      id: payload.artifactId,
+      title: payload.artifactTitle,
+      permission: payload.permission,
+      expiresAt: payload.expiresAt,
+      auditId: payload.auditId,
+    };
+    renderExportPanel();
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown export error';
+    replayState.exportStatus[destination] = 'failed';
+    replayState.exportMessage[destination] = `${formatDestinationLabel(destination)} export failed: ${details}`;
+    replayState.exportArtifacts[destination] = undefined;
+    renderExportPanel();
+  }
+}
+
 async function sendMessageWithTimeout<T>(
   message: BackgroundMessage,
   timeoutMs: number = MESSAGE_TIMEOUT_MS,
@@ -448,10 +637,28 @@ async function loadConfig(): Promise<void> {
   try {
     const response = await sendMessageWithTimeout<BackgroundMessage>({ type: 'BC_CONFIG_REQUEST' }, 5000);
     const config = response.payload as ExtensionConfig;
-    currentConfig = { ...DEFAULT_CONFIG, ...config, ai: { ...DEFAULT_CONFIG.ai, ...(config.ai || {}) } };
+    currentConfig = {
+      ...DEFAULT_CONFIG,
+      ...config,
+      ai: { ...DEFAULT_CONFIG.ai, ...(config.ai || {}) },
+      github: { ...DEFAULT_CONFIG.github, ...(config.github || {}) },
+      gitlab: { ...DEFAULT_CONFIG.gitlab, ...(config.gitlab || {}) },
+      linear: { ...DEFAULT_CONFIG.linear, ...(config.linear || {}) },
+      shareLinks: { ...DEFAULT_CONFIG.shareLinks, ...(config.shareLinks || {}) },
+    };
     const keyState = config.projectKey ? 'set' : 'missing';
-    const aiState = config.ai.enabled ? `${config.ai.provider}:${config.ai.model || 'model-missing'}` : 'disabled';
-    configSummaryEl.textContent = `API: ${config.apiBaseUrl} | Project: ${config.projectId} | Key: ${keyState} | AI: ${aiState}`;
+    const aiState = currentConfig.ai.enabled
+      ? `${currentConfig.ai.provider}:${currentConfig.ai.model || 'model-missing'}`
+      : 'disabled';
+    const ghState = currentConfig.github.enabled
+      ? `${currentConfig.github.owner || 'owner-missing'}/${currentConfig.github.repo || 'repo-missing'}`
+      : 'disabled';
+    const glState = currentConfig.gitlab.enabled ? `${currentConfig.gitlab.projectId || 'project-missing'}` : 'disabled';
+    const linearState = currentConfig.linear.enabled ? `${currentConfig.linear.teamId || 'team-missing'}` : 'disabled';
+    const shareState = currentConfig.shareLinks.enabled
+      ? `${currentConfig.shareLinks.defaultPermission}/${currentConfig.shareLinks.defaultExpiryHours}h`
+      : 'disabled';
+    configSummaryEl.textContent = `API: ${config.apiBaseUrl} | Project: ${config.projectId} | Key: ${keyState} | AI: ${aiState} | GH: ${ghState} | GL: ${glState} | Linear: ${linearState} | Share: ${shareState}`;
   } catch {
     currentConfig = { ...DEFAULT_CONFIG };
     configSummaryEl.textContent = 'Config unavailable. Reload extension and retry.';
@@ -741,6 +948,7 @@ function updateReplayWorkspace(): void {
   renderEventsIntoPanel('networkPanel', state, 'network');
   renderEventsIntoPanel('statePanel', state, 'state');
   renderAiStatusPanel();
+  renderExportPanel();
 }
 
 async function loadReplayPreferences(sessionId: string): Promise<void> {
@@ -978,6 +1186,25 @@ function renderReplayWorkspaceShell(session: ApiSessionDetail): void {
           <div id="aiComparisonPanel" class="workspace-list" style="margin-top:6px;"></div>
           <div id="aiAnalysisResult" class="workspace-list" style="margin-top:6px;"></div>
         </div>
+        <div class="workspace-panel" style="grid-column: 1 / span 2;">
+          <h4>Issue Export</h4>
+          <div class="row">
+            <button data-action="run-destination-export" data-destination="github">Export GitHub</button>
+            <button data-action="run-destination-export" data-destination="gitlab">Export GitLab</button>
+            <button data-action="run-destination-export" data-destination="linear">Export Linear</button>
+          </div>
+          <div class="row" style="align-items:center;">
+            <select id="sharePermission">
+              <option value="viewer">Viewer</option>
+              <option value="commenter">Commenter</option>
+              <option value="editor">Editor</option>
+            </select>
+            <input id="shareExpiryHours" type="number" min="1" max="720" step="1" placeholder="Expiry (hours)" />
+            <button data-action="run-destination-export" data-destination="share-link">Create Share Link</button>
+          </div>
+          <div id="destinationExportStatus" class="workspace-list-item" style="margin-top:6px;">All exports idle.</div>
+          <div id="destinationExportResult" class="workspace-list" style="margin-top:6px;"></div>
+        </div>
       </div>
     </div>
   `;
@@ -1025,6 +1252,21 @@ async function openReplayWorkspace(sessionId: string): Promise<void> {
         currentConfig.ai.embeddingsEnabled &&
         Boolean(currentConfig.ai.repositoryRef),
       modelOverride: currentConfig.ai.model || '',
+      exportStatus: {
+        github: 'idle',
+        gitlab: 'idle',
+        linear: 'idle',
+        'share-link': 'idle',
+      },
+      exportMessage: {
+        github: 'idle',
+        gitlab: 'idle',
+        linear: 'idle',
+        'share-link': 'idle',
+      },
+      exportArtifacts: {},
+      sharePermission: currentConfig.shareLinks.defaultPermission,
+      shareExpiryHours: currentConfig.shareLinks.defaultExpiryHours,
     };
 
     renderReplayWorkspaceShell(session);
@@ -1311,6 +1553,27 @@ sessionDetailEl.addEventListener('click', (event) => {
     return;
   }
 
+  if (action === 'run-destination-export') {
+    const destination = target.dataset.destination as ExportDestination | undefined;
+    if (!destination) {
+      return;
+    }
+    void runDestinationExportForCurrentSession(destination);
+    return;
+  }
+
+  if (action === 'copy-destination-url') {
+    const artifactUrl = target.dataset.artifactUrl;
+    if (!artifactUrl) {
+      return;
+    }
+
+    const destination = target.dataset.destination as ExportDestination | undefined;
+    const destinationLabel = destination ? formatDestinationLabel(destination) : 'Export artifact';
+    void copyTextToClipboard(artifactUrl, `${destinationLabel} URL copied to clipboard.`);
+    return;
+  }
+
   if (action === 'jump-bookmark') {
     const bookmarkId = target.dataset.bookmarkId;
     if (!bookmarkId) {
@@ -1353,6 +1616,12 @@ sessionDetailEl.addEventListener('input', (event) => {
 
   if (target.id === 'aiModelOverride' && target instanceof HTMLInputElement) {
     replayState.modelOverride = target.value.trim();
+    return;
+  }
+
+  if (target.id === 'shareExpiryHours' && target instanceof HTMLInputElement) {
+    const parsed = Number.parseInt(target.value, 10);
+    replayState.shareExpiryHours = clamp(Number.isNaN(parsed) ? replayState.shareExpiryHours : parsed, 1, 720);
   }
 });
 
@@ -1389,6 +1658,14 @@ sessionDetailEl.addEventListener('change', (event) => {
 
   if (target.id === 'aiIncludeCodeContext' && target instanceof HTMLInputElement) {
     replayState.includeCodeContext = target.checked;
+    return;
+  }
+
+  if (target.id === 'sharePermission' && target instanceof HTMLSelectElement) {
+    const value = target.value as ShareLinkPermission;
+    replayState.sharePermission = ['viewer', 'commenter', 'editor'].includes(value)
+      ? value
+      : 'viewer';
     return;
   }
 

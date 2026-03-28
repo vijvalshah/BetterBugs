@@ -115,6 +115,45 @@ export interface AiProviderConfig {
   maxCodeContextFiles: number;
 }
 
+export interface GitHubExportConfig {
+  enabled: boolean;
+  owner: string;
+  repo: string;
+  token: string;
+  labels: string;
+  assignees: string;
+}
+
+export interface GitLabExportConfig {
+  enabled: boolean;
+  baseUrl: string;
+  projectId: string;
+  token: string;
+  labels: string;
+  assigneeIds: string;
+}
+
+export interface LinearExportConfig {
+  enabled: boolean;
+  apiUrl: string;
+  teamId: string;
+  token: string;
+  labelIds: string;
+  assigneeId: string;
+}
+
+export type ShareLinkPermission = 'viewer' | 'commenter' | 'editor';
+
+export interface ShareLinkConfig {
+  enabled: boolean;
+  baseUrl: string;
+  defaultPermission: ShareLinkPermission;
+  defaultExpiryHours: number;
+  requireAuth: boolean;
+}
+
+export type ExportDestination = 'github' | 'gitlab' | 'linear' | 'share-link';
+
 export interface ExtensionConfig {
   apiBaseUrl: string;
   projectId: string;
@@ -127,6 +166,10 @@ export interface ExtensionConfig {
   captureResolution: '720p' | '1080p';
   captureFrameRate: number;
   ai: AiProviderConfig;
+  github: GitHubExportConfig;
+  gitlab: GitLabExportConfig;
+  linear: LinearExportConfig;
+  shareLinks: ShareLinkConfig;
 }
 
 export const DEFAULT_CONFIG: ExtensionConfig = {
@@ -151,6 +194,37 @@ export const DEFAULT_CONFIG: ExtensionConfig = {
     embeddingsEnabled: false,
     repositoryRef: '',
     maxCodeContextFiles: 5,
+  },
+  github: {
+    enabled: false,
+    owner: '',
+    repo: '',
+    token: '',
+    labels: '',
+    assignees: '',
+  },
+  gitlab: {
+    enabled: false,
+    baseUrl: 'https://gitlab.com',
+    projectId: '',
+    token: '',
+    labels: '',
+    assigneeIds: '',
+  },
+  linear: {
+    enabled: false,
+    apiUrl: 'https://api.linear.app/graphql',
+    teamId: '',
+    token: '',
+    labelIds: '',
+    assigneeId: '',
+  },
+  shareLinks: {
+    enabled: true,
+    baseUrl: '',
+    defaultPermission: 'viewer',
+    defaultExpiryHours: 72,
+    requireAuth: true,
   },
 };
 
@@ -183,6 +257,10 @@ export interface BackgroundMessage<T = unknown> {
     | 'BC_TEST_API_CONNECTION_REQUEST'
     | 'BC_TEST_API_CONNECTION_RESPONSE'
     | 'BC_AI_ANALYZE_SESSION_REQUEST'
-    | 'BC_AI_ANALYZE_SESSION_RESPONSE';
+    | 'BC_AI_ANALYZE_SESSION_RESPONSE'
+    | 'BC_EXPORT_GITHUB_ISSUE_REQUEST'
+    | 'BC_EXPORT_GITHUB_ISSUE_RESPONSE'
+    | 'BC_EXPORT_DESTINATION_REQUEST'
+    | 'BC_EXPORT_DESTINATION_RESPONSE';
   payload?: T;
 }

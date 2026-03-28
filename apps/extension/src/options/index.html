@@ -129,6 +129,103 @@
         </div>
       </div>
 
+      <div class="section">
+        <h2>GitHub Export</h2>
+        <label class="row"><input id="ghExportEnabled" type="checkbox" /> Enable GitHub issue export</label>
+        <div>
+          <label for="ghOwner">Repository Owner</label>
+          <input id="ghOwner" type="text" placeholder="example-org" />
+        </div>
+        <div>
+          <label for="ghRepo">Repository Name</label>
+          <input id="ghRepo" type="text" placeholder="example-repo" />
+        </div>
+        <div>
+          <label for="ghToken">GitHub Token</label>
+          <input id="ghToken" type="password" placeholder="Classic PAT with repo scope" />
+        </div>
+        <div>
+          <label for="ghLabels">Default Labels (comma-separated)</label>
+          <input id="ghLabels" type="text" placeholder="bug,needs-triage" />
+        </div>
+        <div>
+          <label for="ghAssignees">Default Assignees (comma-separated usernames)</label>
+          <input id="ghAssignees" type="text" placeholder="octocat,maintainer" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>GitLab Export</h2>
+        <label class="row"><input id="glExportEnabled" type="checkbox" /> Enable GitLab issue export</label>
+        <div>
+          <label for="glBaseUrl">GitLab Base URL</label>
+          <input id="glBaseUrl" type="text" placeholder="https://gitlab.com" />
+        </div>
+        <div>
+          <label for="glProjectId">Project ID or Path</label>
+          <input id="glProjectId" type="text" placeholder="group/project-name or numeric project id" />
+        </div>
+        <div>
+          <label for="glToken">GitLab Token</label>
+          <input id="glToken" type="password" placeholder="PAT with api scope" />
+        </div>
+        <div>
+          <label for="glLabels">Default Labels (comma-separated)</label>
+          <input id="glLabels" type="text" placeholder="bug,triage" />
+        </div>
+        <div>
+          <label for="glAssigneeIds">Default Assignee IDs (comma-separated numeric ids)</label>
+          <input id="glAssigneeIds" type="text" placeholder="12,34" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Linear Export</h2>
+        <label class="row"><input id="linearExportEnabled" type="checkbox" /> Enable Linear issue export</label>
+        <div>
+          <label for="linearApiUrl">Linear GraphQL URL</label>
+          <input id="linearApiUrl" type="text" placeholder="https://api.linear.app/graphql" />
+        </div>
+        <div>
+          <label for="linearTeamId">Linear Team ID</label>
+          <input id="linearTeamId" type="text" placeholder="team UUID" />
+        </div>
+        <div>
+          <label for="linearToken">Linear API Token</label>
+          <input id="linearToken" type="password" placeholder="Linear personal API key" />
+        </div>
+        <div>
+          <label for="linearLabelIds">Default Label IDs (comma-separated)</label>
+          <input id="linearLabelIds" type="text" placeholder="label-id-1,label-id-2" />
+        </div>
+        <div>
+          <label for="linearAssigneeId">Default Assignee ID</label>
+          <input id="linearAssigneeId" type="text" placeholder="user UUID" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Share Links</h2>
+        <label class="row"><input id="shareLinksEnabled" type="checkbox" /> Enable session share link generation</label>
+        <div>
+          <label for="shareLinksBaseUrl">Share Base URL (optional)</label>
+          <input id="shareLinksBaseUrl" type="text" placeholder="Defaults to API base URL" />
+        </div>
+        <div>
+          <label for="shareLinksDefaultPermission">Default Permission</label>
+          <select id="shareLinksDefaultPermission">
+            <option value="viewer">Viewer</option>
+            <option value="commenter">Commenter</option>
+            <option value="editor">Editor</option>
+          </select>
+        </div>
+        <div>
+          <label for="shareLinksDefaultExpiryHours">Default Expiry (hours, 1-720)</label>
+          <input id="shareLinksDefaultExpiryHours" type="number" min="1" max="720" step="1" />
+        </div>
+        <label class="row"><input id="shareLinksRequireAuth" type="checkbox" /> Require auth to open shared link</label>
+      </div>
+
       <button type="submit">Save</button>
       <div id="status"></div>
     </form>

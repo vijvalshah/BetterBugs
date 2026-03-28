@@ -3,6 +3,8 @@ import {
   type CaptureEvent,
   type EnvironmentInfo,
   type ExtensionConfig,
+  type ExportDestination,
+  type ShareLinkPermission,
   type SessionPayload,
   DEFAULT_CONFIG,
 } from '../shared/types';
@@ -22,6 +24,7 @@ import {
 } from './queue-utils';
 import { SessionManager } from '../shared/session-manager';
 import { runAiAnalysis, validateAiProviderConfig } from './ai-analysis';
+import { createExportArtifact } from './export-destinations';
 
 type TabCaptureState = {
   buffer: RollingCaptureBuffer;
@@ -31,12 +34,27 @@ type TabCaptureState = {
 const CONFIG_KEY = 'bugcatcherConfig';
 const QUEUE_KEY = 'bugcatcherQueuedSessions';
 const QUEUE_SYNC_ALARM = 'bugcatcherQueueSync';
+const EXPORT_AUDIT_KEY = 'bugcatcherExportAuditRecords';
+const MAX_EXPORT_AUDIT_RECORDS = 200;
 const BUFFER_WINDOW_MS = 120_000;
 const MAX_BUFFER_EVENTS = 2_400;
 const UPLOAD_TIMEOUT_MS = 10_000;
 const tabState = new Map<number, TabCaptureState>();
 let badgeResetTimer: ReturnType<typeof setTimeout> | undefined;
 let sessionManager: SessionManager | null = null;
+
+type ExportAuditRecord = {
+  id: string;
+  createdAt: string;
+  sessionId: string;
+  destination: ExportDestination;
+  artifactUrl: string;
+  artifactId?: string;
+  artifactTitle?: string;
+  permission?: ShareLinkPermission;
+  expiresAt?: string;
+  metadata: Record<string, string | number | boolean>;
+};
 
 async function initializeSessionManager(): Promise<SessionManager | null> {
   if (sessionManager) {
@@ -54,6 +72,32 @@ async function initializeSessionManager(): Promise<SessionManager | null> {
 
 function resetSessionManager(): void {
   sessionManager = null;
+}
+
+async function appendExportAuditRecord(record: ExportAuditRecord): Promise<void> {
+  const data = await chrome.storage.local.get(EXPORT_AUDIT_KEY);
+  const current = Array.isArray(data[EXPORT_AUDIT_KEY])
+    ? (data[EXPORT_AUDIT_KEY] as ExportAuditRecord[])
+    : [];
+
+  const next = [...current, record].slice(-MAX_EXPORT_AUDIT_RECORDS);
+  await chrome.storage.local.set({ [EXPORT_AUDIT_KEY]: next });
+}
+
+function destinationLabel(destination: ExportDestination): string {
+  if (destination === 'github') {
+    return 'GitHub';
+  }
+
+  if (destination === 'gitlab') {
+    return 'GitLab';
+  }
+
+  if (destination === 'linear') {
+    return 'Linear';
+  }
+
+  return 'Share link';
 }
 
 function getTabState(tabId: number): TabCaptureState {
@@ -113,6 +157,22 @@ function normalizeConfig(raw: Partial<ExtensionConfig> | undefined): ExtensionCo
     ai: {
       ...DEFAULT_CONFIG.ai,
       ...((raw?.ai ?? {}) as Partial<ExtensionConfig['ai']>),
+    },
+    github: {
+      ...DEFAULT_CONFIG.github,
+      ...((raw?.github ?? {}) as Partial<ExtensionConfig['github']>),
+    },
+    gitlab: {
+      ...DEFAULT_CONFIG.gitlab,
+      ...((raw?.gitlab ?? {}) as Partial<ExtensionConfig['gitlab']>),
+    },
+    linear: {
+      ...DEFAULT_CONFIG.linear,
+      ...((raw?.linear ?? {}) as Partial<ExtensionConfig['linear']>),
+    },
+    shareLinks: {
+      ...DEFAULT_CONFIG.shareLinks,
+      ...((raw?.shareLinks ?? {}) as Partial<ExtensionConfig['shareLinks']>),
     },
   };
 }
@@ -727,6 +787,215 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
             ok: false,
             status: 'failed',
             message: `AI analysis failed: ${details}`,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'BC_EXPORT_GITHUB_ISSUE_REQUEST' && message.payload) {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_EXPORT_GITHUB_ISSUE_RESPONSE',
+          payload: {
+            ok: false,
+            message: 'Project key is empty. Set it in Options.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const config = await getConfig();
+        const payload = message.payload as {
+          sessionId?: string;
+          analysis?: {
+            summary?: string;
+            rootCause?: string;
+            classification?: string;
+            actions?: string[];
+            suggestedFiles?: string[];
+          };
+        };
+
+        const sessionId = payload.sessionId || '';
+        if (!sessionId) {
+          sendResponse({
+            type: 'BC_EXPORT_GITHUB_ISSUE_RESPONSE',
+            payload: {
+              ok: false,
+              message: 'Session ID is required for GitHub export.',
+            },
+          });
+          return;
+        }
+
+        sendStatusUpdate('uploading', 'Exporting GitHub issue...');
+
+        const session = await manager.getSessionDetail(sessionId, true);
+        if (!session) {
+          sendStatusUpdate('error', 'Session not found for GitHub export.');
+          sendResponse({
+            type: 'BC_EXPORT_GITHUB_ISSUE_RESPONSE',
+            payload: {
+              ok: false,
+              message: 'Session not found for GitHub export.',
+            },
+          });
+          return;
+        }
+
+        const artifact = await createExportArtifact('github', config, session, payload.analysis);
+        const auditRecord: ExportAuditRecord = {
+          id: `${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          sessionId,
+          destination: 'github',
+          artifactUrl: artifact.artifactUrl,
+          artifactId: artifact.artifactId,
+          artifactTitle: artifact.artifactTitle,
+          metadata: artifact.metadata,
+        };
+        await appendExportAuditRecord(auditRecord);
+
+        const issueNumber = artifact.artifactId ? Number.parseInt(artifact.artifactId, 10) : undefined;
+        const issueNumberLabel = Number.isFinite(issueNumber) ? `#${issueNumber}` : '(issue)';
+        sendStatusUpdate('success', `GitHub issue ${issueNumberLabel} exported.`);
+
+        sendResponse({
+          type: 'BC_EXPORT_GITHUB_ISSUE_RESPONSE',
+          payload: {
+            ok: true,
+            issueUrl: artifact.artifactUrl,
+            issueNumber: Number.isFinite(issueNumber) ? issueNumber : undefined,
+            issueTitle: artifact.artifactTitle,
+            auditId: auditRecord.id,
+            destinationMetadata: artifact.metadata,
+            message: Number.isFinite(issueNumber)
+              ? `GitHub issue #${issueNumber} created successfully.`
+              : 'GitHub issue created successfully.',
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown export error';
+        sendStatusUpdate('error', details);
+        sendResponse({
+          type: 'BC_EXPORT_GITHUB_ISSUE_RESPONSE',
+          payload: {
+            ok: false,
+            message: details,
+          },
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'BC_EXPORT_DESTINATION_REQUEST' && message.payload) {
+    (async () => {
+      const manager = await initializeSessionManager();
+      if (!manager) {
+        sendResponse({
+          type: 'BC_EXPORT_DESTINATION_RESPONSE',
+          payload: {
+            ok: false,
+            message: 'Project key is empty. Set it in Options.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const config = await getConfig();
+        const payload = message.payload as {
+          destination?: ExportDestination;
+          sessionId?: string;
+          analysis?: {
+            summary?: string;
+            rootCause?: string;
+            classification?: string;
+            actions?: string[];
+            suggestedFiles?: string[];
+          };
+          shareOptions?: {
+            permission?: ShareLinkPermission;
+            expiresInHours?: number;
+          };
+        };
+
+        const destination: ExportDestination = payload.destination || 'github';
+        const sessionId = payload.sessionId || '';
+        if (!sessionId) {
+          sendResponse({
+            type: 'BC_EXPORT_DESTINATION_RESPONSE',
+            payload: {
+              ok: false,
+              destination,
+              message: 'Session ID is required for export.',
+            },
+          });
+          return;
+        }
+
+        sendStatusUpdate('uploading', `Exporting to ${destinationLabel(destination)}...`);
+
+        const session = await manager.getSessionDetail(sessionId, true);
+        if (!session) {
+          sendStatusUpdate('error', 'Session not found for export.');
+          sendResponse({
+            type: 'BC_EXPORT_DESTINATION_RESPONSE',
+            payload: {
+              ok: false,
+              destination,
+              message: 'Session not found for export.',
+            },
+          });
+          return;
+        }
+
+        const artifact = await createExportArtifact(destination, config, session, payload.analysis, payload.shareOptions);
+        const auditRecord: ExportAuditRecord = {
+          id: `${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          sessionId,
+          destination,
+          artifactUrl: artifact.artifactUrl,
+          artifactId: artifact.artifactId,
+          artifactTitle: artifact.artifactTitle,
+          permission: artifact.permission,
+          expiresAt: artifact.expiresAt,
+          metadata: artifact.metadata,
+        };
+        await appendExportAuditRecord(auditRecord);
+
+        sendStatusUpdate('success', `${destinationLabel(destination)} artifact exported.`);
+
+        sendResponse({
+          type: 'BC_EXPORT_DESTINATION_RESPONSE',
+          payload: {
+            ok: true,
+            destination,
+            artifactUrl: artifact.artifactUrl,
+            artifactId: artifact.artifactId,
+            artifactTitle: artifact.artifactTitle,
+            permission: artifact.permission,
+            expiresAt: artifact.expiresAt,
+            auditId: auditRecord.id,
+            destinationMetadata: artifact.metadata,
+            message: `${destinationLabel(destination)} export completed.`,
+          },
+        });
+      } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : 'Unknown export error';
+        sendStatusUpdate('error', details);
+        sendResponse({
+          type: 'BC_EXPORT_DESTINATION_RESPONSE',
+          payload: {
+            ok: false,
+            message: details,
           },
         });
       }
