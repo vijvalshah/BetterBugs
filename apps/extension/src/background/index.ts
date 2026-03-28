@@ -9,6 +9,7 @@ import {
 import { RollingCaptureBuffer } from '../shared/capture/rolling-buffer';
 import {
   createCaptureMediaMetadata,
+  normalizeSessionPayloadForUpload,
   normalizeEnvironmentInfo,
   createUploadFailureMessage,
   createUploadTransportFailureMessage,
@@ -148,6 +149,7 @@ type UploadResult = {
 };
 
 async function uploadSessionPayload(payload: SessionPayload, config: ExtensionConfig): Promise<UploadResult> {
+  const normalizedPayload = normalizeSessionPayloadForUpload(payload, config);
   const normalizedBaseUrl = config.apiBaseUrl.replace(/\/+$/, '').replace(/\/sessions$/, '');
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => abortController.abort(), UPLOAD_TIMEOUT_MS);
@@ -160,7 +162,7 @@ async function uploadSessionPayload(payload: SessionPayload, config: ExtensionCo
         'Content-Type': 'application/json',
         'X-Project-Key': config.projectKey,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(normalizedPayload),
       signal: abortController.signal,
     });
   } catch (error: unknown) {
@@ -183,9 +185,28 @@ async function uploadSessionPayload(payload: SessionPayload, config: ExtensionCo
   clearTimeout(timeoutId);
 
   if (!response.ok) {
+    let message = createUploadFailureMessage(response.status);
+    try {
+      const body = (await response.json()) as {
+        error?: string;
+        details?: Array<{ field?: string; issue?: string }>;
+      };
+
+      if (body.details?.length) {
+        const firstIssue = body.details[0];
+        if (firstIssue?.field && firstIssue.issue) {
+          message = `Upload failed (${response.status}): ${firstIssue.field} ${firstIssue.issue}`;
+        }
+      } else if (body.error) {
+        message = `Upload failed (${response.status}): ${body.error}`;
+      }
+    } catch {
+      // Keep generic failure text if error body is not JSON.
+    }
+
     return {
       ok: false,
-      message: createUploadFailureMessage(response.status),
+      message,
       recoverable: response.status >= 500,
     };
   }
