@@ -788,7 +788,7 @@ function renderSessionList(sessions: ApiSession[]): void {
             </div>
           </div>
           <div class="session-actions">
-            <button data-action="view" data-session-id="${escapeHtml(session.sessionId)}">Replay</button>
+            <button data-action="view" data-session-id="${escapeHtml(session.sessionId)}">View Details</button>
             <button data-action="delete" data-session-id="${escapeHtml(session.sessionId)}">Delete</button>
           </div>
         </div>
@@ -1133,6 +1133,16 @@ function attachReplayVideoListeners(): void {
       replayState.isPlaying = false;
     }
   });
+}
+
+function openSessionDetailsTab(sessionId: string): void {
+  try {
+    const pageUrl = chrome.runtime.getURL(`src/session-details/index.html?sessionId=${encodeURIComponent(sessionId)}`);
+    void chrome.tabs.create({ url: pageUrl });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unable to open session details tab.';
+    setStatus(message);
+  }
 }
 
 function renderReplayWorkspaceShell(session: ApiSessionDetail): void {
@@ -1502,7 +1512,7 @@ sessionListEl.addEventListener('click', (event) => {
   }
 
   if (action === 'view') {
-    void openReplayWorkspace(sessionId);
+    openSessionDetailsTab(sessionId);
     return;
   }
 
