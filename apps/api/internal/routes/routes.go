@@ -18,6 +18,18 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
+		pluginGateway := handlers.NewPluginGatewayHandler(db, minioClient, cfg)
+		plugin := v1.Group("/plugin")
+		plugin.Use(middleware.APIKeyAuth(db, cfg))
+		plugin.Use(middleware.RateLimit(cfg))
+		{
+			pluginV1 := plugin.Group("/v1")
+			pluginV1.GET("/manifest", pluginGateway.Manifest)
+			pluginV1.GET("/sessions", pluginGateway.ListSessions)
+			pluginV1.GET("/sessions/:id", pluginGateway.GetSession)
+			pluginV1.POST("/exports", pluginGateway.TriggerExport)
+		}
+
 		// Sessions routes
 		sessions := v1.Group("/sessions")
 		sessions.Use(middleware.APIKeyAuth(db, cfg))

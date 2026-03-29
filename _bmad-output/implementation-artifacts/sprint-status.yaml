@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-28
+last_updated: 2026-03-29
 project: BetterBugs
 project_key: NOKEY
 tracking_system: file-system
@@ -84,7 +84,7 @@ development_status:
   8-1-create-first-class-github-issue-export-flow: review
   8-2-expand-export-and-sharing-options: review
   8-3-improve-routing-with-labels-assignees-and-notifications: review
-  8-4-provide-plugin-pathways-for-ide-and-automation-ecosystems: backlog
+  8-4-provide-plugin-pathways-for-ide-and-automation-ecosystems: review
   epic-8-retrospective: optional
   epic-9: backlog
   9-1-manage-capture-sanitization-and-integration-settings: backlog
