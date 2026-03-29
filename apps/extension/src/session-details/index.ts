@@ -3,6 +3,9 @@ import type { BackgroundMessage } from '../shared/types';
 
 export type SessionEvent = ApiSessionDetail['events'][number];
 
+let cachedEvents: SessionEvent[] = [];
+let activeFilter: string | null = null;
+
 export function parseSessionIdFromSearch(search: string): string {
   const params = new URLSearchParams(search.startsWith('?') ? search : `?${search}`);
   const value = (params.get('sessionId') || '').trim();
@@ -121,6 +124,27 @@ function renderStatus(text: string, kind: 'info' | 'error' | 'success'): void {
   statusEl.className = `status ${kind}`;
 }
 
+function renderFilters(events: SessionEvent[], filter: string | null): void {
+  if (typeof document === 'undefined') return;
+  const filtersEl = document.getElementById('eventFilters');
+  const countsEl = document.getElementById('counts');
+  if (!filtersEl || !countsEl) return;
+
+  const counts: Record<string, number> = {};
+  events.forEach((event) => {
+    counts[event.type] = (counts[event.type] || 0) + 1;
+  });
+
+  const buttons = ['all', ...Object.keys(counts)].map((type) => {
+    const count = type === 'all' ? events.length : counts[type] ?? 0;
+    const isActive = (filter ?? 'all') === type;
+    return `<button data-filter="${type}" style="padding:6px 10px;border:1px solid #d0d7de;border-radius:14px;background:${isActive ? '#0f6cbd' : '#fff'};color:${isActive ? '#fff' : '#0f1419'};cursor:pointer;font-size:12px;">${type} (${count})</button>`;
+  });
+
+  filtersEl.innerHTML = buttons.join('');
+  countsEl.textContent = `Total events: ${events.length}`;
+}
+
 function renderMeta(session: ApiSessionDetail): void {
   if (typeof document === 'undefined') return;
   const metaEl = document.getElementById('sessionMeta');
@@ -168,6 +192,83 @@ function renderEvents(events: SessionEvent[]): void {
     .join('');
 
   listEl.innerHTML = rows;
+  try {
+    listEl.dataset.allEvents = JSON.stringify(cachedEvents);
+  } catch {
+    // ignore dataset serialization issues
+  }
+}
+
+function renderDomSnapshots(signedMedia?: ApiSessionDetail['signedMedia']): void {
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById('domSnapshotContainer');
+  if (!container) return;
+  const snapshots = signedMedia?.domSnapshots || [];
+  if (!snapshots.length) {
+    container.innerHTML = '<div class="empty">No DOM snapshots.</div>';
+    return;
+  }
+
+  const items = snapshots
+    .map((src, index) => `<div class="thumb" data-index="${index}"><img src="${escapeHtml(src)}" alt="DOM snapshot ${index + 1}" loading="lazy" /></div>`)
+    .join('');
+  container.innerHTML = items;
+
+  container.onclick = (event) => {
+    const target = event.target as HTMLElement;
+    const wrapper = target.closest('.thumb') as HTMLDivElement | null;
+    if (!wrapper) return;
+    const idx = Number.parseInt(wrapper.dataset.index || '0', 10);
+    const video = document.getElementById('videoPlayer') as HTMLVideoElement | null;
+    const all = container.querySelectorAll('.thumb');
+    all.forEach((el) => el.classList.remove('active'));
+    wrapper.classList.add('active');
+    if (!Number.isNaN(idx) && video?.duration) {
+      const ratio = Math.min(1, Math.max(0, idx / Math.max(snapshots.length - 1, 1)));
+      video.currentTime = ratio * video.duration;
+    }
+  };
+}
+
+function renderMedia(session: ApiSessionDetail): void {
+  if (typeof document === 'undefined') return;
+  const videoEl = document.getElementById('videoPlayer') as HTMLVideoElement | null;
+  const timeline = document.getElementById('timeline') as HTMLInputElement | null;
+  const readout = document.getElementById('timelineReadout');
+  if (!videoEl || !timeline || !readout) return;
+
+  const videoSrc = session.signedMedia?.video;
+  if (videoSrc) {
+    videoEl.src = videoSrc;
+  } else {
+    videoEl.removeAttribute('src');
+    videoEl.load();
+  }
+
+  const maxTs = session.events.reduce((max, e) => Math.max(max, e.timestamp || 0), 0);
+  const timelineMax = Math.max(maxTs, 1000);
+  timeline.max = String(timelineMax);
+  timeline.value = '0';
+  readout.textContent = '0ms';
+
+  timeline.oninput = () => {
+    const value = Number.parseInt(timeline.value, 10) || 0;
+    readout.textContent = `${value}ms`;
+    if (videoEl.duration && videoEl.duration > 0) {
+      const ratio = value / timelineMax;
+      videoEl.currentTime = ratio * videoEl.duration;
+    }
+  };
+
+  videoEl.onseeked = () => {
+    if (!videoEl.duration || timelineMax <= 0) return;
+    const ratio = videoEl.currentTime / videoEl.duration;
+    const ms = Math.round(ratio * timelineMax);
+    timeline.value = String(ms);
+    readout.textContent = `${ms}ms`;
+  };
+
+  renderDomSnapshots(session.signedMedia);
 }
 
 async function loadSession(sessionId: string): Promise<void> {
@@ -199,8 +300,12 @@ async function loadSession(sessionId: string): Promise<void> {
 
     const session = payload.session;
     const orderedEvents = sortEventsByTimestamp(Array.isArray(session.events) ? session.events : []);
+    cachedEvents = orderedEvents;
+    activeFilter = null;
     renderMeta(session);
-    renderEvents(orderedEvents);
+    renderFilters(cachedEvents, activeFilter);
+    renderMedia({ ...session, events: orderedEvents });
+    renderEvents(cachedEvents);
     renderStatus('Session loaded successfully.', 'success');
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to load session.';
@@ -217,6 +322,7 @@ function bootstrap(): void {
   const form = document.getElementById('sessionForm');
   const inputEl = document.getElementById('sessionIdInput') as HTMLInputElement | null;
   const loadButton = document.getElementById('loadButton') as HTMLButtonElement | null;
+  const filtersEl = document.getElementById('eventFilters');
 
   if (!form || !inputEl || !loadButton) {
     return;
@@ -237,6 +343,18 @@ function bootstrap(): void {
     loadButton.disabled = true;
     void loadSession(seed).finally(() => {
       loadButton.disabled = false;
+    });
+  }
+
+  if (filtersEl) {
+    filtersEl.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      if (!target || !target.dataset.filter) return;
+      const filter = target.dataset.filter;
+      activeFilter = filter === 'all' ? null : filter;
+      const filtered = activeFilter ? cachedEvents.filter((e) => e.type === activeFilter) : cachedEvents;
+      renderFilters(cachedEvents, activeFilter);
+      renderEvents(filtered);
     });
   }
 }
