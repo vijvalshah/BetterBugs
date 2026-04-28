@@ -91,6 +91,29 @@ export interface SessionPayload {
   };
 }
 
+export type CaptureState = 'idle' | 'recording' | 'review';
+
+export interface TabCaptureStatus {
+  state: CaptureState;
+  startTime?: number;
+  stopTime?: number;
+  eventCount?: number;
+  durationMs?: number;
+}
+
+export interface ScreenshotPreview {
+  dataUrl: string;
+  capturedAt: string;
+  storedPath?: string;
+}
+
+export interface VideoPreview {
+  objectUrl: string;
+  capturedAt: string;
+  durationMs?: number;
+  storedPath?: string;
+}
+
 export interface CaptureMediaMetadata {
   resolution: '720p' | '1080p';
   frameRate: number;
@@ -270,6 +293,22 @@ export interface BackgroundMessage<T = unknown> {
     | 'BC_CONFIG_SAVE'
     | 'BC_CAPTURE_PREVIEW_REQUEST'
     | 'BC_CAPTURE_PREVIEW_RESPONSE'
+    | 'BC_CAPTURE_START_REQUEST'
+    | 'BC_CAPTURE_START_RESPONSE'
+    | 'BC_CAPTURE_STOP_REQUEST'
+    | 'BC_CAPTURE_STOP_RESPONSE'
+    | 'BC_CAPTURE_STATE_REQUEST'
+    | 'BC_CAPTURE_STATE_RESPONSE'
+    | 'BC_CAPTURE_SCREENSHOT_REQUEST'
+    | 'BC_CAPTURE_SCREENSHOT_RESPONSE'
+    | 'BC_CAPTURE_SCREENSHOT_PREVIEW_REQUEST'
+    | 'BC_CAPTURE_SCREENSHOT_PREVIEW_RESPONSE'
+    | 'BC_CAPTURE_VIDEO_START_REQUEST'
+    | 'BC_CAPTURE_VIDEO_START_RESPONSE'
+    | 'BC_CAPTURE_VIDEO_STOP_REQUEST'
+    | 'BC_CAPTURE_VIDEO_STOP_RESPONSE'
+    | 'BC_CAPTURE_VIDEO_PREVIEW_REQUEST'
+    | 'BC_CAPTURE_VIDEO_PREVIEW_RESPONSE'
     | 'BC_GET_SESSIONS_REQUEST'
     | 'BC_GET_SESSIONS_RESPONSE'
     | 'BC_GET_SESSION_DETAIL_REQUEST'

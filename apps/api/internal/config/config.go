@@ -15,6 +15,7 @@ type Config struct {
 	MinioSecretKey string
 	MinioBucket   string
 	MinioUseSSL   bool
+	MediaStorageDir string
 	APIKeySecret  string
 	EncryptionKey string
 	RateLimitReqs int
@@ -51,6 +52,7 @@ func Load() *Config {
 		MinioSecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinioBucket:   getEnv("MINIO_BUCKET", "bugcatcher-sessions"),
 		MinioUseSSL:   minioUseSSL,
+		MediaStorageDir: getEnv("MEDIA_STORAGE_DIR", "storage/media"),
 		APIKeySecret:  getEnv("API_KEY_SECRET", "change-me-in-production"),
 		EncryptionKey: getEnv("ENCRYPTION_KEY", "change-me-with-32-byte-key"),
 		RateLimitReqs: rateLimitReqs,

@@ -4,15 +4,31 @@ import {
   type ExtensionConfig,
   type ExportDestination,
   type ShareLinkPermission,
+  type ScreenshotPreview,
+  type TabCaptureStatus,
+  type VideoPreview,
 } from '../shared/types';
 import type { ApiSession, ApiSessionDetail } from '../shared/api-client';
 
 const captureButton = document.getElementById('captureButton') as HTMLButtonElement;
+const screenshotCaptureButton = document.getElementById('screenshotCaptureButton') as HTMLButtonElement;
+const screenshotPreviewImageEl = document.getElementById('screenshotPreviewImage') as HTMLImageElement;
+const screenshotPreviewMetaEl = document.getElementById('screenshotPreviewMeta') as HTMLDivElement;
+const videoPreviewMetaEl = document.getElementById('videoPreviewMeta') as HTMLDivElement;
+const videoPreviewPlayerEl = document.getElementById('videoPreviewPlayer') as HTMLVideoElement;
+const videoStartButtonEl = document.getElementById('videoStartButton') as HTMLButtonElement;
+const videoStopButtonEl = document.getElementById('videoStopButton') as HTMLButtonElement;
+const videoTimerEl = document.getElementById('videoTimer') as HTMLDivElement;
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const capturePreviewEl = document.getElementById('capturePreview') as HTMLDivElement;
 const configSummaryEl = document.getElementById('configSummary') as HTMLDivElement;
 const openOptionsEl = document.getElementById('openOptions') as HTMLAnchorElement;
 const shortcutHintEl = document.getElementById('shortcutHint') as HTMLDivElement;
+const captureStateEl = document.getElementById('captureState') as HTMLDivElement;
+const captureStateLabelEl = document.getElementById('captureStateLabel') as HTMLDivElement;
+const captureInfoEl = document.getElementById('captureInfo') as HTMLSpanElement;
+const captureStartBtnEl = document.getElementById('captureStartBtn') as HTMLButtonElement;
+const captureStopBtnEl = document.getElementById('captureStopBtn') as HTMLButtonElement;
 const sessionSearchEl = document.getElementById('sessionSearch') as HTMLInputElement;
 const errorFilterEl = document.getElementById('errorFilter') as HTMLSelectElement;
 const sortByEl = document.getElementById('sortBy') as HTMLSelectElement;
@@ -160,6 +176,13 @@ function formatMs(value: number): string {
 
 function formatConfidence(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
+}
+
+function formatCaptureDuration(durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function formatAnalysisTimestamp(value: string): string {
@@ -743,6 +766,120 @@ async function loadShortcutHint(): Promise<void> {
   }
 
   shortcutHintEl.textContent = `Shortcut: ${captureCommand.shortcut}`;
+}
+
+function renderCaptureState(status: TabCaptureStatus): void {
+  captureStateEl.style.display = 'block';
+  captureStartBtnEl.textContent = 'Start Capture';
+
+  if (status.state === 'idle') {
+    captureStateLabelEl.textContent = 'Idle';
+    captureStateLabelEl.style.color = '#777';
+    captureInfoEl.textContent = 'Ready to capture';
+    captureStartBtnEl.style.display = 'block';
+    captureStopBtnEl.style.display = 'none';
+    return;
+  }
+
+  if (status.state === 'recording') {
+    const duration = formatCaptureDuration(status.durationMs ?? 0);
+    captureStateLabelEl.textContent = 'Recording...';
+    captureStateLabelEl.style.color = '#d32f2f';
+    captureInfoEl.textContent = `Elapsed ${duration}`;
+    captureStartBtnEl.style.display = 'none';
+    captureStopBtnEl.style.display = 'block';
+    return;
+  }
+
+  const duration = formatCaptureDuration(status.durationMs ?? 0);
+  const eventCount = status.eventCount ?? 0;
+  captureStateLabelEl.textContent = 'Review';
+  captureStateLabelEl.style.color = '#388e3c';
+  captureInfoEl.textContent = `${duration} · ${eventCount} events`;
+  captureStartBtnEl.textContent = 'Start New Capture';
+  captureStartBtnEl.style.display = 'block';
+  captureStopBtnEl.style.display = 'none';
+}
+
+function renderScreenshotPreview(preview?: ScreenshotPreview): void {
+  if (!preview) {
+    screenshotPreviewMetaEl.textContent = 'No screenshot captured yet.';
+    screenshotPreviewImageEl.style.display = 'none';
+    screenshotPreviewImageEl.src = '';
+    return;
+  }
+
+  screenshotPreviewMetaEl.textContent = `Captured at ${new Date(preview.capturedAt).toLocaleString()}`;
+  screenshotPreviewImageEl.src = preview.dataUrl;
+  screenshotPreviewImageEl.style.display = 'block';
+}
+
+function renderVideoPreview(preview?: VideoPreview): void {
+  if (!preview) {
+    videoPreviewMetaEl.textContent = 'No recording captured yet.';
+    videoPreviewPlayerEl.style.display = 'none';
+    videoPreviewPlayerEl.src = '';
+    return;
+  }
+
+  videoPreviewMetaEl.textContent = `Recorded at ${new Date(preview.capturedAt).toLocaleString()}`;
+  videoPreviewPlayerEl.src = preview.objectUrl;
+  videoPreviewPlayerEl.style.display = 'block';
+}
+
+async function loadVideoPreview(): Promise<void> {
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_VIDEO_PREVIEW_REQUEST',
+    }, 5000);
+    const payload = response.payload as { ok?: boolean; preview?: VideoPreview } | undefined;
+    if (!payload?.preview) {
+      return;
+    }
+    renderVideoPreview(payload.preview);
+  } catch {
+    // Ignore preview failures to keep popup responsive.
+  }
+}
+
+function formatRecordingTimer(durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+async function loadScreenshotPreview(): Promise<void> {
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_SCREENSHOT_PREVIEW_REQUEST',
+    }, 5000);
+    const payload = response.payload as { ok?: boolean; preview?: ScreenshotPreview } | undefined;
+    if (!payload?.preview) {
+      return;
+    }
+    renderScreenshotPreview(payload.preview);
+  } catch {
+    // Ignore preview failures to keep popup responsive.
+  }
+}
+
+async function loadCaptureState(): Promise<void> {
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_STATE_REQUEST',
+    }, 5000);
+    const payload = response.payload as { ok?: boolean; status?: TabCaptureStatus; message?: string } | undefined;
+    if (!payload?.status) {
+      return;
+    }
+    renderCaptureState(payload.status);
+    if (payload.ok === false && payload.message) {
+      setStatus(payload.message);
+    }
+  } catch {
+    // Ignore capture state failures to keep popup responsive.
+  }
 }
 
 function renderSessionList(sessions: ApiSession[]): void {
@@ -1451,6 +1588,154 @@ async function deleteSession(sessionId: string): Promise<void> {
   }
 }
 
+captureStartBtnEl.addEventListener('click', async () => {
+  captureStartBtnEl.disabled = true;
+  setStatus('Starting capture...');
+
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_START_REQUEST',
+    });
+    const payload = response.payload as { ok?: boolean; message?: string; status?: TabCaptureStatus } | undefined;
+    if (!payload?.ok) {
+      setStatus(payload?.message ?? 'Failed to start capture.');
+      return;
+    }
+    setStatus(payload.message ?? 'Capture started.');
+    if (payload.status) {
+      renderCaptureState(payload.status);
+    }
+  } catch (error: unknown) {
+    setStatus(error instanceof Error ? error.message : 'Failed to start capture.');
+  } finally {
+    captureStartBtnEl.disabled = false;
+  }
+});
+
+captureStopBtnEl.addEventListener('click', async () => {
+  captureStopBtnEl.disabled = true;
+  setStatus('Stopping capture...');
+
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_STOP_REQUEST',
+    });
+    const payload = response.payload as { ok?: boolean; message?: string; status?: TabCaptureStatus } | undefined;
+    if (!payload?.ok) {
+      setStatus(payload?.message ?? 'Failed to stop capture.');
+      return;
+    }
+    setStatus(payload.message ?? 'Capture stopped.');
+    if (payload.status) {
+      renderCaptureState(payload.status);
+    }
+  } catch (error: unknown) {
+    setStatus(error instanceof Error ? error.message : 'Failed to stop capture.');
+  } finally {
+    captureStopBtnEl.disabled = false;
+  }
+});
+
+screenshotCaptureButton.addEventListener('click', async () => {
+  screenshotCaptureButton.disabled = true;
+  setStatus('Capturing screenshot...');
+
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_SCREENSHOT_REQUEST',
+    }, 20_000);
+    const payload = response.payload as { ok?: boolean; message?: string; preview?: ScreenshotPreview } | undefined;
+    if (!payload?.ok) {
+      setStatus(payload?.message ?? 'Failed to capture screenshot.');
+      return;
+    }
+
+    if (payload.preview) {
+      renderScreenshotPreview(payload.preview);
+    }
+    setStatus(payload.message ?? 'Screenshot captured.');
+  } catch (error: unknown) {
+    setStatus(error instanceof Error ? error.message : 'Failed to capture screenshot.');
+  } finally {
+    screenshotCaptureButton.disabled = false;
+  }
+});
+
+let recordingTimerId: number | undefined;
+let recordingStartTime: number | undefined;
+
+function startRecordingTimer(): void {
+  recordingStartTime = Date.now();
+  videoTimerEl.textContent = 'Recording 0:00';
+  recordingTimerId = window.setInterval(() => {
+    if (!recordingStartTime) {
+      return;
+    }
+    const elapsed = Date.now() - recordingStartTime;
+    videoTimerEl.textContent = `Recording ${formatRecordingTimer(elapsed)}`;
+  }, 1000);
+}
+
+function stopRecordingTimer(): void {
+  if (recordingTimerId !== undefined) {
+    window.clearInterval(recordingTimerId);
+    recordingTimerId = undefined;
+  }
+  recordingStartTime = undefined;
+  videoTimerEl.textContent = '';
+}
+
+videoStartButtonEl.addEventListener('click', async () => {
+  videoStartButtonEl.disabled = true;
+  setStatus('Starting recording...');
+
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_VIDEO_START_REQUEST',
+    }, 20_000);
+    const payload = response.payload as { ok?: boolean; message?: string } | undefined;
+    if (!payload?.ok) {
+      setStatus(payload?.message ?? 'Failed to start recording.');
+      return;
+    }
+    setStatus(payload.message ?? 'Recording started.');
+    videoStartButtonEl.style.display = 'none';
+    videoStopButtonEl.style.display = 'block';
+    startRecordingTimer();
+  } catch (error: unknown) {
+    setStatus(error instanceof Error ? error.message : 'Failed to start recording.');
+  } finally {
+    videoStartButtonEl.disabled = false;
+  }
+});
+
+videoStopButtonEl.addEventListener('click', async () => {
+  videoStopButtonEl.disabled = true;
+  setStatus('Stopping recording...');
+
+  try {
+    const response = await sendMessageWithTimeout<BackgroundMessage>({
+      type: 'BC_CAPTURE_VIDEO_STOP_REQUEST',
+    }, 20_000);
+    const payload = response.payload as { ok?: boolean; message?: string; preview?: VideoPreview } | undefined;
+    if (!payload?.ok) {
+      setStatus(payload?.message ?? 'Failed to stop recording.');
+      return;
+    }
+    setStatus(payload.message ?? 'Recording stopped.');
+    if (payload.preview) {
+      renderVideoPreview(payload.preview);
+    }
+    videoStopButtonEl.style.display = 'none';
+    videoStartButtonEl.style.display = 'block';
+  } catch (error: unknown) {
+    setStatus(error instanceof Error ? error.message : 'Failed to stop recording.');
+  } finally {
+    stopRecordingTimer();
+    videoStopButtonEl.disabled = false;
+  }
+});
+
 captureButton.addEventListener('click', async () => {
   captureButton.disabled = true;
   setStatus('Capturing and uploading...');
@@ -1765,5 +2050,8 @@ sessionDetailEl.addEventListener('change', (event) => {
 
 void loadConfig();
 void loadCapturePreview();
+void loadCaptureState();
+void loadScreenshotPreview();
+void loadVideoPreview();
 void loadShortcutHint();
 void loadSessionList();

@@ -44,6 +44,15 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 			sessions.GET("/:id", sessionHandler.GetByID)
 			sessions.DELETE("/:id", sessionHandler.Delete)
 		}
+
+		media := v1.Group("/media")
+		media.Use(middleware.APIKeyAuth(db, cfg))
+		media.Use(middleware.RateLimit(cfg))
+		{
+			mediaHandler := handlers.NewMediaHandler(cfg)
+			media.POST("/screenshots", mediaHandler.StoreScreenshot)
+			media.POST("/videos", mediaHandler.StoreVideo)
+		}
 	}
 
 	// Swagger documentation

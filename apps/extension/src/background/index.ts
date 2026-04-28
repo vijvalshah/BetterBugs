@@ -6,6 +6,9 @@ import {
   type ExportDestination,
   type ShareLinkPermission,
   type SessionPayload,
+  type ScreenshotPreview,
+  type TabCaptureStatus,
+  type VideoPreview,
   DEFAULT_CONFIG,
 } from '../shared/types';
 import { RollingCaptureBuffer } from '../shared/capture/rolling-buffer';
@@ -30,6 +33,12 @@ import { dispatchRoutingNotifications, type NotificationDeliveryResult } from '.
 type TabCaptureState = {
   buffer: RollingCaptureBuffer;
   environment?: EnvironmentInfo;
+  captureStatus: TabCaptureStatus;
+  screenshotPreview?: ScreenshotPreview;
+  videoPreview?: VideoPreview;
+  videoRecorder?: MediaRecorder;
+  videoChunks?: Blob[];
+  videoStartTime?: number;
 };
 
 const CONFIG_KEY = 'bugcatcherConfig';
@@ -131,6 +140,7 @@ function getTabState(tabId: number): TabCaptureState {
   if (!state) {
     state = {
       buffer: new RollingCaptureBuffer(BUFFER_WINDOW_MS, MAX_BUFFER_EVENTS),
+      captureStatus: { state: 'idle' },
     };
     tabState.set(tabId, state);
   }
@@ -455,6 +465,307 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
   };
 }
 
+async function startCapture(): Promise<{ ok: boolean; message: string; status?: TabCaptureStatus }> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return { ok: false, message: 'No active tab found.', status: { state: 'idle' } };
+  }
+
+  const state = getTabState(tab.id);
+  if (state.captureStatus.state === 'recording') {
+    return { ok: false, message: 'Capture already running.', status: state.captureStatus };
+  }
+
+  state.buffer = new RollingCaptureBuffer(BUFFER_WINDOW_MS, MAX_BUFFER_EVENTS);
+  state.captureStatus = {
+    state: 'recording',
+    startTime: Date.now(),
+    stopTime: undefined,
+    durationMs: undefined,
+    eventCount: 0,
+  };
+
+  void chrome.action.setBadgeText({ text: 'REC' });
+  void chrome.action.setBadgeBackgroundColor({ color: '#d32f2f' });
+
+  return { ok: true, message: 'Capture started.', status: state.captureStatus };
+}
+
+async function stopCapture(): Promise<{ ok: boolean; message: string; status?: TabCaptureStatus }> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return { ok: false, message: 'No active tab found.', status: { state: 'idle' } };
+  }
+
+  const state = getTabState(tab.id);
+  if (state.captureStatus.state !== 'recording') {
+    return { ok: false, message: 'Capture is not running.', status: state.captureStatus };
+  }
+
+  const stopTime = Date.now();
+  const startTime = state.captureStatus.startTime ?? stopTime;
+  state.captureStatus = {
+    state: 'review',
+    startTime,
+    stopTime,
+    durationMs: Math.max(stopTime - startTime, 0),
+    eventCount: state.buffer.size,
+  };
+
+  void chrome.action.setBadgeText({ text: 'OK' });
+  void chrome.action.setBadgeBackgroundColor({ color: '#0f8b44' });
+
+  return { ok: true, message: 'Capture stopped.', status: state.captureStatus };
+}
+
+async function getCaptureStatus(): Promise<{ ok: boolean; status: TabCaptureStatus } & { message?: string }> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return { ok: false, message: 'No active tab found.', status: { state: 'idle' } };
+  }
+
+  const state = getTabState(tab.id);
+  if (state.captureStatus.state === 'recording' && state.captureStatus.startTime) {
+    const now = Date.now();
+    return {
+      ok: true,
+      status: {
+        ...state.captureStatus,
+        durationMs: Math.max(now - state.captureStatus.startTime, 0),
+        eventCount: state.buffer.size,
+      },
+    };
+  }
+
+  return { ok: true, status: state.captureStatus };
+}
+
+function normalizeApiBaseUrl(apiBaseUrl: string): string {
+  const trimmed = apiBaseUrl.replace(/\/+$/, '');
+  if (trimmed.endsWith('/sessions')) {
+    return trimmed.slice(0, -'/sessions'.length);
+  }
+  return trimmed;
+}
+
+async function persistVideo(
+  config: ExtensionConfig,
+  blob: Blob,
+  capturedAt: string,
+  tab: chrome.tabs.Tab,
+): Promise<{ ok: boolean; message: string; storedPath?: string }> {
+  if (!config.projectKey) {
+    return { ok: false, message: 'Project key is empty. Set it in Options.' };
+  }
+
+  const baseUrl = normalizeApiBaseUrl(config.apiBaseUrl);
+  try {
+    const encoded = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(encoded)));
+    const response = await fetch(`${baseUrl}/media/videos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Project-Key': config.projectKey,
+      },
+      body: JSON.stringify({
+        dataUrl: `data:video/webm;base64,${base64}`,
+        capturedAt,
+        tabUrl: tab.url ?? 'about:blank',
+        tabTitle: tab.title ?? 'Current tab',
+      }),
+    });
+
+    const payload = (await response.json()) as { path?: string; error?: string; message?: string };
+    if (!response.ok) {
+      return { ok: false, message: payload.error ?? payload.message ?? 'Failed to store video.' };
+    }
+
+    return { ok: true, message: 'Video stored.', storedPath: payload.path };
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return { ok: false, message: `Video storage failed: ${details}` };
+  }
+}
+
+async function startVideoRecording(): Promise<{ ok: boolean; message: string }> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return { ok: false, message: 'No active tab found.' };
+  }
+
+  const state = getTabState(tab.id);
+  if (state.videoRecorder) {
+    return { ok: false, message: 'Recording already in progress.' };
+  }
+
+  const stream = await chrome.tabCapture.capture({
+    audio: false,
+    video: true,
+    videoConstraints: {
+      mandatory: {
+        maxFrameRate: 30,
+      },
+    },
+  });
+
+  if (!stream) {
+    return { ok: false, message: 'Unable to start tab capture.' };
+  }
+
+  const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      chunks.push(event.data);
+    }
+  };
+  recorder.onstop = () => {
+    stream.getTracks().forEach((track) => track.stop());
+  };
+
+  state.videoRecorder = recorder;
+  state.videoChunks = chunks;
+  state.videoStartTime = Date.now();
+  recorder.start(500);
+
+  return { ok: true, message: 'Recording started.' };
+}
+
+async function stopVideoRecording(): Promise<{
+  ok: boolean;
+  message: string;
+  preview?: VideoPreview;
+}> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return { ok: false, message: 'No active tab found.' };
+  }
+
+  const state = getTabState(tab.id);
+  if (!state.videoRecorder || !state.videoChunks || !state.videoStartTime) {
+    return { ok: false, message: 'No recording in progress.' };
+  }
+
+  const recorder = state.videoRecorder;
+  recorder.stop();
+
+  const blob = new Blob(state.videoChunks, { type: 'video/webm' });
+  const objectUrl = URL.createObjectURL(blob);
+  const capturedAt = new Date().toISOString();
+  const durationMs = Math.max(Date.now() - state.videoStartTime, 0);
+
+  state.videoRecorder = undefined;
+  state.videoChunks = undefined;
+  state.videoStartTime = undefined;
+
+  const preview: VideoPreview = {
+    objectUrl,
+    capturedAt,
+    durationMs,
+  };
+  state.videoPreview = preview;
+
+  const config = await getConfig();
+  const persistResult = await persistVideo(config, blob, capturedAt, tab);
+  if (persistResult.ok && persistResult.storedPath) {
+    state.videoPreview = {
+      ...preview,
+      storedPath: persistResult.storedPath,
+    };
+  }
+
+  if (!persistResult.ok) {
+    return {
+      ok: true,
+      message: `Recording stopped. ${persistResult.message}`,
+      preview: state.videoPreview,
+    };
+  }
+
+  return { ok: true, message: 'Recording stopped and stored.', preview: state.videoPreview };
+}
+
+async function persistScreenshot(
+  config: ExtensionConfig,
+  preview: ScreenshotPreview,
+  tab: chrome.tabs.Tab,
+): Promise<{ ok: boolean; message: string; storedPath?: string }> {
+  if (!config.projectKey) {
+    return { ok: false, message: 'Project key is empty. Set it in Options.' };
+  }
+
+  const baseUrl = normalizeApiBaseUrl(config.apiBaseUrl);
+  try {
+    const response = await fetch(`${baseUrl}/media/screenshots`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Project-Key': config.projectKey,
+      },
+      body: JSON.stringify({
+        dataUrl: preview.dataUrl,
+        capturedAt: preview.capturedAt,
+        tabUrl: tab.url ?? 'about:blank',
+        tabTitle: tab.title ?? 'Current tab',
+      }),
+    });
+
+    const payload = (await response.json()) as { path?: string; error?: string; message?: string };
+    if (!response.ok) {
+      return { ok: false, message: payload.error ?? payload.message ?? 'Failed to store screenshot.' };
+    }
+
+    return { ok: true, message: 'Screenshot stored.', storedPath: payload.path };
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return { ok: false, message: `Storage upload failed: ${details}` };
+  }
+}
+
+async function captureScreenshot(): Promise<{
+  ok: boolean;
+  message: string;
+  preview?: ScreenshotPreview;
+}> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || tab.windowId === undefined) {
+    return { ok: false, message: 'No active tab found.' };
+  }
+
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+  const preview: ScreenshotPreview = {
+    dataUrl,
+    capturedAt: new Date().toISOString(),
+  };
+
+  const state = getTabState(tab.id);
+  state.screenshotPreview = preview;
+
+  const config = await getConfig();
+  const persistResult = await persistScreenshot(config, preview, tab);
+  if (persistResult.ok && persistResult.storedPath) {
+    state.screenshotPreview = {
+      ...preview,
+      storedPath: persistResult.storedPath,
+    };
+  }
+
+  if (!persistResult.ok) {
+    return {
+      ok: true,
+      message: `Screenshot captured. ${persistResult.message}`,
+      preview: state.screenshotPreview,
+    };
+  }
+
+  return {
+    ok: true,
+    message: 'Screenshot captured and stored.',
+    preview: state.screenshotPreview,
+  };
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.sync.get(CONFIG_KEY);
   if (!existing[CONFIG_KEY]) {
@@ -477,10 +788,25 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.commands.onCommand.addListener((command) => {
   if (command !== 'trigger_capture') return;
 
-  void captureNow().catch((error: unknown) => {
+  void (async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      sendStatusUpdate('error', 'No active tab found.');
+      return;
+    }
+
+    const state = getTabState(tab.id);
+    const result = state.captureStatus.state === 'recording'
+      ? await stopCapture()
+      : await startCapture();
+
+    if (!result.ok) {
+      sendStatusUpdate('error', result.message);
+    }
+  })().catch((error: unknown) => {
     sendStatusUpdate(
       'error',
-      error instanceof Error ? error.message : 'Capture failed after shortcut trigger.',
+      error instanceof Error ? error.message : 'Capture toggle failed after shortcut trigger.',
     );
   });
 });
@@ -534,6 +860,127 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
           },
         }),
       );
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_START_REQUEST') {
+    startCapture()
+      .then((result) => sendResponse({ type: 'BC_CAPTURE_START_RESPONSE', payload: result }))
+      .catch((error: unknown) => {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({ type: 'BC_CAPTURE_START_RESPONSE', payload: { ok: false, message: details } });
+      });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_STOP_REQUEST') {
+    stopCapture()
+      .then((result) => sendResponse({ type: 'BC_CAPTURE_STOP_RESPONSE', payload: result }))
+      .catch((error: unknown) => {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({ type: 'BC_CAPTURE_STOP_RESPONSE', payload: { ok: false, message: details } });
+      });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_STATE_REQUEST') {
+    getCaptureStatus()
+      .then((result) => sendResponse({ type: 'BC_CAPTURE_STATE_RESPONSE', payload: result }))
+      .catch(() => {
+        sendResponse({
+          type: 'BC_CAPTURE_STATE_RESPONSE',
+          payload: { ok: false, status: { state: 'idle' } },
+        });
+      });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_SCREENSHOT_REQUEST') {
+    captureScreenshot()
+      .then((result) => sendResponse({ type: 'BC_CAPTURE_SCREENSHOT_RESPONSE', payload: result }))
+      .catch((error: unknown) => {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_CAPTURE_SCREENSHOT_RESPONSE',
+          payload: { ok: false, message: details },
+        });
+      });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_SCREENSHOT_PREVIEW_REQUEST') {
+    (async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        sendResponse({
+          type: 'BC_CAPTURE_SCREENSHOT_PREVIEW_RESPONSE',
+          payload: { ok: false, preview: undefined },
+        });
+        return;
+      }
+
+      const state = getTabState(tab.id);
+      sendResponse({
+        type: 'BC_CAPTURE_SCREENSHOT_PREVIEW_RESPONSE',
+        payload: { ok: true, preview: state.screenshotPreview },
+      });
+    })().catch(() => {
+      sendResponse({
+        type: 'BC_CAPTURE_SCREENSHOT_PREVIEW_RESPONSE',
+        payload: { ok: false, preview: undefined },
+      });
+    });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_VIDEO_START_REQUEST') {
+    startVideoRecording()
+      .then((result) => sendResponse({ type: 'BC_CAPTURE_VIDEO_START_RESPONSE', payload: result }))
+      .catch((error: unknown) => {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_CAPTURE_VIDEO_START_RESPONSE',
+          payload: { ok: false, message: details },
+        });
+      });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_VIDEO_STOP_REQUEST') {
+    stopVideoRecording()
+      .then((result) => sendResponse({ type: 'BC_CAPTURE_VIDEO_STOP_RESPONSE', payload: result }))
+      .catch((error: unknown) => {
+        const details = error instanceof Error ? error.message : 'Unknown error';
+        sendResponse({
+          type: 'BC_CAPTURE_VIDEO_STOP_RESPONSE',
+          payload: { ok: false, message: details },
+        });
+      });
+    return true;
+  }
+
+  if (message.type === 'BC_CAPTURE_VIDEO_PREVIEW_REQUEST') {
+    (async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        sendResponse({
+          type: 'BC_CAPTURE_VIDEO_PREVIEW_RESPONSE',
+          payload: { ok: false, preview: undefined },
+        });
+        return;
+      }
+
+      const state = getTabState(tab.id);
+      sendResponse({
+        type: 'BC_CAPTURE_VIDEO_PREVIEW_RESPONSE',
+        payload: { ok: true, preview: state.videoPreview },
+      });
+    })().catch(() => {
+      sendResponse({
+        type: 'BC_CAPTURE_VIDEO_PREVIEW_RESPONSE',
+        payload: { ok: false, preview: undefined },
+      });
+    });
     return true;
   }
 
