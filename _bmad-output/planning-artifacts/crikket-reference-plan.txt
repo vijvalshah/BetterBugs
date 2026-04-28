@@ -1,0 +1,222 @@
+Crikket reference plan (no code copying)
+Last updated: 2026-04-28
+
+Purpose
+- Use Crikket as a reference implementation for capture, upload, and reporting UX.
+- Rebuild in BetterBugs stack with our own architecture, data models, and code.
+- Do not copy code. Use only ideas, flow structure, and UX patterns.
+
+Rules and constraints
+- Crikket is AGPL-3.0. Treat this as reference-only. Do not copy source.
+- Preserve BetterBugs architecture (Go API + MV3 extension + shared types).
+- Prioritize a stable end-to-end capture flow before advanced features.
+- Every step below must be testable with a defined input, output, and UI state.
+
+How to use this document
+- Each feature block lists: goal, dependencies, Crikket reference files, BetterBugs target areas, and acceptance checks.
+- Build order below is strict. Do not start a later step until earlier steps pass their checks.
+
+Glossary
+- Capture artifact: screenshot or video file produced by the extension.
+- Debugger payload: action/console/network events captured by injected runtime.
+- Upload session: server response that returns presigned storage targets.
+- Finalize: server call that attaches metadata and returns a share URL.
+- Share link: URL to view a bug report without full app context.
+
+Build order (detailed)
+
+Phase 0: Stabilize baseline (must be green before capture work)
+0.1 Extension builds without runtime errors
+- Output: extension loads in Chrome and popup opens.
+- BetterBugs targets: apps/extension/src/manifest.ts, apps/extension/src/popup.
+0.2 API boots and serves health endpoint
+- Output: local API responds to GET /health (or equivalent).
+- BetterBugs targets: apps/api/main.go, apps/api/internal/routes.
+0.3 Storage decision recorded (local, S3, or MinIO)
+- Output: chosen storage model and env vars documented.
+- BetterBugs targets: SETUP.md, apps/api/.env.example.
+
+Phase 1: Extension capture flow (UI + tab capture)
+1.1 Capture entrypoints + hotkeys
+- Goal: hotkeys and popup buttons can start/stop capture.
+- Dependencies: Phase 0 done.
+- Crikket reference:
+  - Wormhole File Sharing/apps/extension/wxt.config.ts
+  - Wormhole File Sharing/apps/extension/entrypoints/background.ts
+  - Wormhole File Sharing/apps/extension/entrypoints/popup
+  - Wormhole File Sharing/apps/extension/entrypoints/recorder
+- BetterBugs targets:
+  - apps/extension/src/manifest.ts
+  - apps/extension/src/background
+  - apps/extension/src/popup
+- Acceptance checks:
+  - Hotkey triggers capture start.
+  - Popup shows capture state (idle -> recording -> review).
+
+1.2 Tab capture: screenshot
+- Goal: capture a screenshot of the current tab.
+- Dependencies: 1.1
+- Crikket reference:
+  - Wormhole File Sharing/apps/extension/lib/display-media.ts
+- BetterBugs targets:
+  - apps/extension/src/background (tab capture helper)
+  - apps/extension/src/popup (preview state)
+- Acceptance checks:
+  - Screenshot saved in memory and preview renders.
+
+1.3 Tab capture: video
+- Goal: record tab video and save as webm.
+- Dependencies: 1.2
+- Crikket reference:
+  - Wormhole File Sharing/apps/extension/lib/recorder-submit.ts
+- BetterBugs targets:
+  - apps/extension/src/background (media recorder)
+  - apps/extension/src/popup (record timer, stop, review)
+- Acceptance checks:
+  - Video records, stops, and replays locally.
+
+Phase 2: Debugger runtime and event capture
+2.1 Injected runtime instrumentation
+- Goal: capture action/console/network events in the page.
+- Dependencies: 1.1
+- Crikket reference:
+  - Wormhole File Sharing/apps/extension/lib/bug-report-debugger/engine/background/injection.ts
+  - Wormhole File Sharing/packages/capture-core/src/debugger/engine/page/index.ts
+- BetterBugs targets:
+  - apps/extension/src/content (runtime injection)
+  - apps/extension/src/background (message routing)
+- Acceptance checks:
+  - Console log appears in extension panel within 2s.
+  - Network request appears with method + status.
+
+2.2 Event queue and retention
+- Goal: keep a rolling buffer of debugger events per tab.
+- Dependencies: 2.1
+- Crikket reference:
+  - Wormhole File Sharing/apps/extension/lib/bug-report-debugger/engine/background/session-store.ts
+- BetterBugs targets:
+  - apps/extension/src/background (session buffer)
+  - apps/extension/src/shared (event types)
+- Acceptance checks:
+  - Last N events preserved; old events evicted.
+
+Phase 3: Upload pipeline (API + storage)
+3.1 Upload session endpoint
+- Goal: API returns presigned URLs for capture + debugger payload.
+- Dependencies: Phase 1 complete (artifact exists), Phase 2 complete (payload exists).
+- Crikket reference:
+  - Wormhole File Sharing/apps/server/src/capture/upload-session-route.ts
+  - Wormhole File Sharing/packages/bug-reports/src/lib/upload-session.ts
+- BetterBugs targets:
+  - apps/api/internal/handlers (upload session route)
+  - apps/api/internal/storage (presign helper)
+- Acceptance checks:
+  - Response includes upload URLs + report id.
+
+3.2 Direct upload from extension
+- Goal: extension uploads artifacts directly to storage.
+- Dependencies: 3.1
+- Crikket reference:
+  - Wormhole File Sharing/packages/capture-core/src/upload/client.ts
+  - Wormhole File Sharing/packages/bug-reports/src/lib/artifact-storage.ts
+  - Wormhole File Sharing/apps/docs/content/docs/self-hosting/storage.mdx
+- BetterBugs targets:
+  - apps/extension/src/background (upload client)
+  - apps/api/internal/storage (signed URL handling)
+- Acceptance checks:
+  - Upload succeeds; storage object exists.
+
+3.3 Finalize endpoint
+- Goal: API finalizes report, returns share URL and warnings.
+- Dependencies: 3.2
+- Crikket reference:
+  - Wormhole File Sharing/apps/server/src/capture/finalize-route.ts
+- BetterBugs targets:
+  - apps/api/internal/handlers (finalize route)
+  - apps/extension/src/popup (result UI)
+- Acceptance checks:
+  - Finalize returns share link; popup shows it.
+
+Phase 4: Report CRUD and UI
+4.1 Report list API
+- Goal: list reports with pagination and filters.
+- Dependencies: 3.3
+- Crikket reference:
+  - Wormhole File Sharing/packages/api/src/routers/bug-report.ts
+  - Wormhole File Sharing/packages/bug-reports/src/procedures/list-bug-reports.ts
+- BetterBugs targets:
+  - apps/api/internal/handlers (list route)
+  - apps/extension/src/popup (list panel)
+- Acceptance checks:
+  - List loads in popup; pagination works.
+
+4.2 Report detail API
+- Goal: fetch report detail + debugger payload + artifacts.
+- Dependencies: 4.1
+- Crikket reference:
+  - Wormhole File Sharing/packages/bug-reports/src/procedures/get-bug-report.ts
+- BetterBugs targets:
+  - apps/api/internal/handlers (detail route)
+  - apps/extension/src/popup (detail + replay panels)
+- Acceptance checks:
+  - Clicking a report opens detail view with logs/network.
+
+4.3 Share link view
+- Goal: read-only report view via share link.
+- Dependencies: 3.3
+- Crikket reference:
+  - Wormhole File Sharing/apps/docs/content/docs/comparison.mdx (share links capability)
+- BetterBugs targets:
+  - apps/web or lightweight share page
+- Acceptance checks:
+  - Share link works without app login.
+
+Phase 5: Hardening (security, rate limits, sanitization)
+5.1 API key or token auth
+- Goal: require credentials for API access.
+- Dependencies: 3.x
+- Crikket reference:
+  - Wormhole File Sharing/apps/server/src/capture/protection.ts
+- BetterBugs targets:
+  - apps/api/internal/middleware
+
+5.2 Rate limiting
+- Goal: prevent abuse on capture endpoints.
+- Dependencies: 5.1
+- Crikket reference:
+  - Wormhole File Sharing/apps/docs/content/docs/self-hosting/troubleshooting.mdx
+- BetterBugs targets:
+  - apps/api/internal/middleware
+
+5.3 Sanitization + privacy
+- Goal: strip secrets before upload.
+- Dependencies: 2.x
+- BetterBugs targets:
+  - apps/extension/src/content (sanitization)
+  - apps/api/internal/handlers (server validation)
+
+Phase 6: Differentiators (BetterBugs only)
+6.1 AI analysis and code context (Epic 7 + Epic 10)
+6.2 Integrations: GitHub/GitLab/Linear + webhooks (Epic 8)
+6.3 MCP tools for IDE workflows (Epic 10)
+
+Feature-by-feature reference map (quick pointer)
+- Extension entrypoints/hotkeys: Wormhole File Sharing/apps/extension/wxt.config.ts
+- Recorder + tab capture: Wormhole File Sharing/apps/extension/lib/display-media.ts
+- Debugger runtime: Wormhole File Sharing/packages/capture-core/src/debugger/engine/page/index.ts
+- Debugger session store: Wormhole File Sharing/apps/extension/lib/bug-report-debugger/engine/background/session-store.ts
+- Upload session route: Wormhole File Sharing/apps/server/src/capture/upload-session-route.ts
+- Finalize route: Wormhole File Sharing/apps/server/src/capture/finalize-route.ts
+- Storage guidance: Wormhole File Sharing/apps/docs/content/docs/self-hosting/storage.mdx
+- Report CRUD router: Wormhole File Sharing/packages/api/src/routers/bug-report.ts
+
+Definition of done for the "parity baseline"
+- A user can capture screenshot or video from the extension.
+- Console + network events are attached to the report.
+- Upload session -> direct upload -> finalize works end-to-end.
+- Report list/detail works in the popup.
+- Share link can open a read-only report.
+
+Notes
+- This plan references Crikket for flow design and UX only.
+- Do not copy code or assets.
