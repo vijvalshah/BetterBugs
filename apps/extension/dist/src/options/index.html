@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BugCatcher Options</title>
+    <style>
+      body {
+        margin: 24px;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        max-width: 760px;
+      }
+      h1 {
+        margin-bottom: 16px;
+      }
+      form {
+        display: grid;
+        gap: 12px;
+      }
+      label {
+        font-weight: 600;
+      }
+      input[type='text'],
+      input[type='password'] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #c8c8c8;
+        border-radius: 6px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 72px;
+        padding: 8px;
+        border: 1px solid #c8c8c8;
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      select,
+      input[type='number'] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #c8c8c8;
+        border-radius: 6px;
+      }
+      .section {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .section h2 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      button {
+        width: fit-content;
+        padding: 10px 14px;
+        border: 0;
+        border-radius: 8px;
+        background: #0f6cbd;
+        color: white;
+        font-weight: 600;
+      }
+      #status {
+        min-height: 18px;
+        font-size: 13px;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/options-ddtWwRma.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <link rel="modulepreload" crossorigin href="/assets/types-DhVnsN-V.js">
+  </head>
+  <body>
+    <h1>BugCatcher Options</h1>
+    <form id="configForm">
+      <div class="section">
+        <h2>Capture Settings</h2>
+        <div>
+          <label for="apiBaseUrl">API Base URL</label>
+          <input id="apiBaseUrl" type="text" placeholder="http://localhost:3001/api/v1" />
+        </div>
+        <div>
+          <label for="projectId">Project ID</label>
+          <input id="projectId" type="text" />
+        </div>
+        <div>
+          <label for="projectKey">Project Key</label>
+          <input id="projectKey" type="password" />
+        </div>
+        <label class="row"><input id="captureNetwork" type="checkbox" /> Capture network</label>
+        <label class="row"><input id="captureConsole" type="checkbox" /> Capture console</label>
+        <label class="row"><input id="captureErrors" type="checkbox" /> Capture errors</label>
+      </div>
+
+      <div class="section">
+        <h2>AI Analysis (BYOM)</h2>
+        <label class="row"><input id="aiEnabled" type="checkbox" /> Enable AI analysis</label>
+        <div>
+          <label for="aiProvider">Provider</label>
+          <select id="aiProvider">
+            <option value="none">None</option>
+            <option value="openai">OpenAI Compatible</option>
+            <option value="ollama">Ollama</option>
+            <option value="custom">Custom Endpoint</option>
+          </select>
+        </div>
+        <div>
+          <label for="aiModel">Model</label>
+          <input id="aiModel" type="text" placeholder="gpt-4o-mini / llama3.1 / custom model" />
+        </div>
+        <div>
+          <label for="aiBaseUrl">Provider Base URL (optional for OpenAI default)</label>
+          <input id="aiBaseUrl" type="text" placeholder="https://api.openai.com/v1 or http://localhost:11434" />
+        </div>
+        <div>
+          <label for="aiApiKey">Provider API Key</label>
+          <input id="aiApiKey" type="password" placeholder="Required for OpenAI/Custom" />
+        </div>
+        <div>
+          <label for="aiTemperature">Temperature (0-1)</label>
+          <input id="aiTemperature" type="number" min="0" max="1" step="0.1" />
+        </div>
+        <div>
+          <label for="aiMaxTokens">Max Tokens (64-4096)</label>
+          <input id="aiMaxTokens" type="number" min="64" max="4096" step="1" />
+        </div>
+        <label class="row"><input id="aiCodeContextEnabled" type="checkbox" /> Enable code-context analysis</label>
+        <label class="row"><input id="aiEmbeddingsEnabled" type="checkbox" /> Embeddings available for repository lookup</label>
+        <div>
+          <label for="aiRepositoryRef">Repository Reference</label>
+          <input id="aiRepositoryRef" type="text" placeholder="owner/repo or internal repository identifier" />
+        </div>
+        <div>
+          <label for="aiMaxCodeContextFiles">Max Code Context Files (1-12)</label>
+          <input id="aiMaxCodeContextFiles" type="number" min="1" max="12" step="1" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>GitHub Export</h2>
+        <label class="row"><input id="ghExportEnabled" type="checkbox" /> Enable GitHub issue export</label>
+        <div>
+          <label for="ghOwner">Repository Owner</label>
+          <input id="ghOwner" type="text" placeholder="example-org" />
+        </div>
+        <div>
+          <label for="ghRepo">Repository Name</label>
+          <input id="ghRepo" type="text" placeholder="example-repo" />
+        </div>
+        <div>
+          <label for="ghToken">GitHub Token</label>
+          <input id="ghToken" type="password" placeholder="Classic PAT with repo scope" />
+        </div>
+        <div>
+          <label for="ghLabels">Default Labels (comma-separated)</label>
+          <input id="ghLabels" type="text" placeholder="bug,needs-triage" />
+        </div>
+        <div>
+          <label for="ghAssignees">Default Assignees (comma-separated usernames)</label>
+          <input id="ghAssignees" type="text" placeholder="octocat,maintainer" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>GitLab Export</h2>
+        <label class="row"><input id="glExportEnabled" type="checkbox" /> Enable GitLab issue export</label>
+        <div>
+          <label for="glBaseUrl">GitLab Base URL</label>
+          <input id="glBaseUrl" type="text" placeholder="https://gitlab.com" />
+        </div>
+        <div>
+          <label for="glProjectId">Project ID or Path</label>
+          <input id="glProjectId" type="text" placeholder="group/project-name or numeric project id" />
+        </div>
+        <div>
+          <label for="glToken">GitLab Token</label>
+          <input id="glToken" type="password" placeholder="PAT with api scope" />
+        </div>
+        <div>
+          <label for="glLabels">Default Labels (comma-separated)</label>
+          <input id="glLabels" type="text" placeholder="bug,triage" />
+        </div>
+        <div>
+          <label for="glAssigneeIds">Default Assignee IDs (comma-separated numeric ids)</label>
+          <input id="glAssigneeIds" type="text" placeholder="12,34" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Linear Export</h2>
+        <label class="row"><input id="linearExportEnabled" type="checkbox" /> Enable Linear issue export</label>
+        <div>
+          <label for="linearApiUrl">Linear GraphQL URL</label>
+          <input id="linearApiUrl" type="text" placeholder="https://api.linear.app/graphql" />
+        </div>
+        <div>
+          <label for="linearTeamId">Linear Team ID</label>
+          <input id="linearTeamId" type="text" placeholder="team UUID" />
+        </div>
+        <div>
+          <label for="linearToken">Linear API Token</label>
+          <input id="linearToken" type="password" placeholder="Linear personal API key" />
+        </div>
+        <div>
+          <label for="linearLabelIds">Default Label IDs (comma-separated)</label>
+          <input id="linearLabelIds" type="text" placeholder="label-id-1,label-id-2" />
+        </div>
+        <div>
+          <label for="linearAssigneeId">Default Assignee ID</label>
+          <input id="linearAssigneeId" type="text" placeholder="user UUID" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Share Links</h2>
+        <label class="row"><input id="shareLinksEnabled" type="checkbox" /> Enable session share link generation</label>
+        <div>
+          <label for="shareLinksBaseUrl">Share Base URL (optional)</label>
+          <input id="shareLinksBaseUrl" type="text" placeholder="Defaults to API base URL" />
+        </div>
+        <div>
+          <label for="shareLinksDefaultPermission">Default Permission</label>
+          <select id="shareLinksDefaultPermission">
+            <option value="viewer">Viewer</option>
+            <option value="commenter">Commenter</option>
+            <option value="editor">Editor</option>
+          </select>
+        </div>
+        <div>
+          <label for="shareLinksDefaultExpiryHours">Default Expiry (hours, 1-720)</label>
+          <input id="shareLinksDefaultExpiryHours" type="number" min="1" max="720" step="1" />
+        </div>
+        <label class="row"><input id="shareLinksRequireAuth" type="checkbox" /> Require auth to open shared link</label>
+      </div>
+
+      <div class="section">
+        <h2>Routing Heuristics</h2>
+        <label class="row"><input id="routingEnabled" type="checkbox" /> Enable label/assignee routing recommendations</label>
+        <div>
+          <label for="routingLabelRules">Label Rules (one per line: pattern:label1|label2)</label>
+          <textarea id="routingLabelRules" placeholder="timeout:backend|urgent\ncheckout:payments|high-priority"></textarea>
+        </div>
+        <div>
+          <label for="routingOwnershipRules">Ownership Rules (one per line: pattern:assignee1|assignee2)</label>
+          <textarea id="routingOwnershipRules" placeholder="checkout:payments-oncall\nauth:identity-oncall"></textarea>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Export Notifications</h2>
+        <label class="row"><input id="notificationEnabled" type="checkbox" /> Send notifications for export events</label>
+        <div>
+          <label for="notificationSlackWebhookUrl">Slack Webhook URL (optional)</label>
+          <input id="notificationSlackWebhookUrl" type="password" placeholder="https://hooks.slack.com/services/..." />
+        </div>
+        <div>
+          <label for="notificationWebhookUrl">Generic Webhook URL (optional)</label>
+          <input id="notificationWebhookUrl" type="text" placeholder="https://hooks.example.com/bugcatcher" />
+        </div>
+        <div>
+          <label for="notificationMaxRetries">Max Retries (0-5)</label>
+          <input id="notificationMaxRetries" type="number" min="0" max="5" step="1" />
+        </div>
+        <div>
+          <label for="notificationRetryBackoffMs">Retry Backoff (ms, 100-30000)</label>
+          <input id="notificationRetryBackoffMs" type="number" min="100" max="30000" step="100" />
+        </div>
+      </div>
+
+      <button type="submit">Save</button>
+      <div id="status"></div>
+    </form>
+  </body>
+</html>

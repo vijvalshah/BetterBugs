@@ -1,0 +1,74 @@
+{
+  "manifest_version": 3,
+  "name": "BugCatcher Capture Extension",
+  "description": "Capture console, network, and error data for BugCatcher",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_title": "BugCatcher"
+  },
+  "commands": {
+    "trigger_capture": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Shift+B"
+      },
+      "description": "Trigger BugCatcher capture"
+    }
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "service-worker-loader.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "assets/index.ts-loader-X4xnrhzd.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "js": [
+        "assets/page-world-capture.ts-BkSkhaD-.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "src/session-details/*",
+        "assets/types-DhVnsN-V.js",
+        "assets/types-DhVnsN-V.js.map",
+        "assets/index.ts-BDQavLtB.js",
+        "assets/index.ts-BDQavLtB.js.map",
+        "assets/page-world-capture.ts-BkSkhaD-.js",
+        "assets/page-world-capture.ts-BkSkhaD-.js.map"
+      ],
+      "use_dynamic_url": false
+    }
+  ],
+  "options_ui": {
+    "page": "src/options/index.html",
+    "open_in_tab": true
+  }
+}
