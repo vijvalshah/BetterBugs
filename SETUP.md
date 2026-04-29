@@ -2,6 +2,8 @@
 
 ## What's Been Built
 
+# What You Get
+
 ✅ **Go Backend API** (`apps/api`)
 - Gin framework with MongoDB + MinIO
 - Session management (create, list, get, delete, tags, comments)
@@ -81,11 +83,6 @@ API will start on http://localhost:3001
 
 ```bash
 cd apps/extension
-
-# Install dependencies
-npm install
-
-# Build extension
 npm run build
 ```
 
@@ -349,8 +346,11 @@ go mod tidy
 - ✅ MinIO object storage
 - ✅ API key authentication
 - ✅ Rate limiting
+- ✅ Storage policy enforcement
 - ✅ Swagger documentation
 - ✅ Docker support
+- ✅ Extension capture (console, network, errors, screenshot, video)
+- ✅ Upload session, direct artifact upload, finalize
 
 ### Extension Features
 - ✅ Console capture (log, warn, error, info)

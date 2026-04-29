@@ -35,6 +35,73 @@
         color: #333;
         min-height: 18px;
       }
+      .capture-state {
+        margin-bottom: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        background: #f5f5f5;
+        border: 1px solid #e0e0e0;
+      }
+      .capture-state__label {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .capture-state__info {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+      .capture-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .capture-actions button {
+        flex: 1;
+      }
+      .capture-start {
+        background: #d32f2f;
+      }
+      .capture-stop {
+        background: #388e3c;
+      }
+      .screenshot-preview {
+        margin-top: 10px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        background: #fafafa;
+        font-size: 11px;
+      }
+      .screenshot-preview img {
+        width: 100%;
+        max-height: 180px;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        background: #000;
+      }
+      .video-preview {
+        margin-top: 10px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        background: #fafafa;
+        font-size: 11px;
+      }
+      .video-preview video {
+        width: 100%;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        background: #000;
+      }
+      .video-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .video-actions button {
+        flex: 1;
+      }
       .config {
         margin-top: 10px;
         font-size: 12px;
@@ -233,12 +300,36 @@
         color: #0f6cbd;
       }
     </style>
-    <script type="module" crossorigin src="/assets/popup-pX7yLqOh.js"></script>
+    <script type="module" crossorigin src="/assets/popup-LnzhDvRM.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
-    <link rel="modulepreload" crossorigin href="/assets/types-DhVnsN-V.js">
+    <link rel="modulepreload" crossorigin href="/assets/types-DdczWsOC.js">
   </head>
   <body>
     <h1>BugCatcher</h1>
+    <div id="captureState" class="capture-state">
+      <div id="captureStateLabel" class="capture-state__label">Idle</div>
+      <div class="capture-state__info">
+        <span id="captureInfo">Ready to capture</span>
+      </div>
+      <div class="capture-actions">
+        <button id="captureStartBtn" class="capture-start">Start Capture</button>
+        <button id="captureStopBtn" class="capture-stop" style="display: none;">Stop Capture</button>
+      </div>
+    </div>
+    <button id="screenshotCaptureButton">Capture Screenshot</button>
+    <div id="screenshotPreview" class="screenshot-preview">
+      <div id="screenshotPreviewMeta">No screenshot captured yet.</div>
+      <img id="screenshotPreviewImage" alt="screenshot preview" style="display: none;" />
+    </div>
+    <div id="videoPreview" class="video-preview">
+      <div id="videoPreviewMeta">No recording captured yet.</div>
+      <video id="videoPreviewPlayer" controls style="display: none;"></video>
+      <div class="video-actions">
+        <button id="videoStartButton">Start Recording</button>
+        <button id="videoStopButton" style="display: none;">Stop Recording</button>
+      </div>
+      <div id="videoTimer" style="margin-top: 6px; color: #444; font-size: 11px;"></div>
+    </div>
     <button id="captureButton">Capture Current Session</button>
     <div id="status" class="status"></div>
     <div id="capturePreview" class="config" style="margin-top: 8px"></div>
@@ -288,6 +379,6 @@
       </div>
       <div id="pagerInfo" class="pager-info"></div>
       <div id="sessionDetail" class="detail" style="display: none"></div>
-    </div>
+    </div>
   </body>
 </html>
