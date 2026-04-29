@@ -683,6 +683,10 @@ function computeSeverity(session: ApiSession): SessionSeverity {
 }
 
 function getSessionPreviewImage(session: ApiSession): string | undefined {
+  const screenshot = session.signedMedia?.screenshot;
+  if (screenshot && screenshot.length > 0) {
+    return screenshot;
+  }
   const snapshot = session.signedMedia?.domSnapshots?.[0];
   return snapshot && snapshot.length > 0 ? snapshot : undefined;
 }

@@ -265,6 +265,12 @@ func (h *PluginGatewayHandler) signMedia(media models.Media) map[string]interfac
 
 	result := map[string]interface{}{}
 
+	if media.ScreenshotKey != "" {
+		if signed, err := h.minioClient.GetPresignedURL(context.Background(), media.ScreenshotKey, time.Hour); err == nil {
+			result["screenshot"] = signed
+		}
+	}
+
 	if media.VideoKey != "" {
 		if signed, err := h.minioClient.GetPresignedURL(context.Background(), media.VideoKey, time.Hour); err == nil {
 			result["video"] = signed

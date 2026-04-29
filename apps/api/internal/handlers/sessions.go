@@ -29,12 +29,150 @@ type SessionHandler struct {
 	cfg         *config.Config
 }
 
+type sessionCreateResult struct {
+	sessionID     string
+	insertedID    interface{}
+	eventRefs     int
+	storageStatus storagePolicyStatus
+}
+
+type sessionCreateError struct {
+	status  int
+	code    string
+	message string
+	details []ValidationIssue
+}
+
 func NewSessionHandler(db *database.Database, minioClient *storage.MinIOClient, cfg *config.Config) *SessionHandler {
 	return &SessionHandler{
 		db:          db,
 		minioClient: minioClient,
 		cfg:         cfg,
 	}
+}
+
+func (h *SessionHandler) createSessionWithID(
+	ctx context.Context,
+	payload models.SessionPayload,
+	sessionID string,
+) (sessionCreateResult, *sessionCreateError) {
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
+	var errorSignature string
+	if payload.Error != nil {
+		hash := sha256.Sum256([]byte(payload.Error.Type + ":" + payload.Error.Message))
+		errorSignature = hex.EncodeToString(hash[:])
+		payload.Error.Signature = errorSignature
+	}
+
+	stats := models.Stats{
+		ConsoleCount:   0,
+		NetworkCount:   0,
+		StateSnapshots: 0,
+	}
+	for _, event := range payload.Events {
+		switch event.Type {
+		case "console":
+			stats.ConsoleCount++
+		case "network":
+			stats.NetworkCount++
+		case "state":
+			stats.StateSnapshots++
+		}
+	}
+
+	triageSummary := buildTriageSummary(payload, stats)
+
+	now := time.Now()
+	storageStatus, err := h.enforceProjectStoragePolicy(ctx, payload.ProjectID, now)
+	if err != nil {
+		return sessionCreateResult{}, &sessionCreateError{
+			status:  http.StatusServiceUnavailable,
+			code:    "STORAGE_POLICY_ERROR",
+			message: "Failed to enforce project storage policy",
+			details: []ValidationIssue{{
+				Field: "project.storagePolicy",
+				Issue: err.Error(),
+			}},
+		}
+	}
+
+	eventRefs := make([]primitive.ObjectID, 0, len(payload.Events))
+	if len(payload.Events) > 0 {
+		events := make([]interface{}, len(payload.Events))
+		for i, event := range payload.Events {
+			event.SessionID = sessionID
+			event.CreatedAt = now
+			events[i] = event
+		}
+
+		eventInsertResult, err := h.db.Events.InsertMany(ctx, events)
+		if err != nil {
+			return sessionCreateResult{}, &sessionCreateError{
+				status:  http.StatusInternalServerError,
+				code:    "DB_EVENT_INSERT_ERROR",
+				message: "Failed to persist session events",
+			}
+		}
+
+		for _, insertedID := range eventInsertResult.InsertedIDs {
+			if objectID, ok := insertedID.(primitive.ObjectID); ok {
+				eventRefs = append(eventRefs, objectID)
+			}
+		}
+	}
+
+	session := models.Session{
+		ProjectID:   payload.ProjectID,
+		SessionID:   sessionID,
+		URL:         payload.URL,
+		Title:       payload.Title,
+		Timestamp:   payload.Timestamp,
+		Duration:    payload.Duration,
+		Environment: payload.Environment,
+		App:         payload.App,
+		Error:       payload.Error,
+		Media:       payload.Media,
+		Tags:        []string{},
+		Comments:    []models.SessionComment{},
+		Operations: []models.SessionOperation{
+			{
+				Action: "session-created",
+				Actor:  "system",
+				At:     now,
+				Details: map[string]interface{}{
+					"eventRefs": len(eventRefs),
+				},
+			},
+		},
+		EventRefs:     eventRefs,
+		Stats:         stats,
+		TriageSummary: triageSummary,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	result, err := h.db.Sessions.InsertOne(ctx, session)
+	if err != nil {
+		if len(eventRefs) > 0 {
+			_, _ = h.db.Events.DeleteMany(ctx, bson.M{"sessionId": sessionID})
+		}
+
+		return sessionCreateResult{}, &sessionCreateError{
+			status:  http.StatusInternalServerError,
+			code:    "DB_INSERT_ERROR",
+			message: "Failed to create session",
+		}
+	}
+
+	return sessionCreateResult{
+		sessionID:     sessionID,
+		insertedID:    result.InsertedID,
+		eventRefs:     len(eventRefs),
+		storageStatus: storageStatus,
+	}, nil
 }
 
 // Create godoc
@@ -72,126 +210,24 @@ func (h *SessionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Generate session ID
-	sessionID := uuid.New().String()
-
-	// Generate error signature if error exists
-	var errorSignature string
-	if payload.Error != nil {
-		hash := sha256.Sum256([]byte(payload.Error.Type + ":" + payload.Error.Message))
-		errorSignature = hex.EncodeToString(hash[:])
-		payload.Error.Signature = errorSignature
-	}
-
-	// Calculate stats
-	stats := models.Stats{
-		ConsoleCount:   0,
-		NetworkCount:   0,
-		StateSnapshots: 0,
-	}
-	for _, event := range payload.Events {
-		switch event.Type {
-		case "console":
-			stats.ConsoleCount++
-		case "network":
-			stats.NetworkCount++
-		case "state":
-			stats.StateSnapshots++
+	result, createErr := h.createSessionWithID(c.Request.Context(), payload, "")
+	if createErr != nil {
+		response := gin.H{
+			"error": createErr.message,
+			"code":  createErr.code,
 		}
-	}
-
-	triageSummary := buildTriageSummary(payload, stats)
-
-	// Insert events first so session can persist event references.
-	now := time.Now()
-	storageStatus, err := h.enforceProjectStoragePolicy(c.Request.Context(), payload.ProjectID, now)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Failed to enforce project storage policy",
-			"code":  "STORAGE_POLICY_ERROR",
-			"details": []ValidationIssue{{
-				Field: "project.storagePolicy",
-				Issue: err.Error(),
-			}},
-		})
-		return
-	}
-
-	eventRefs := make([]primitive.ObjectID, 0, len(payload.Events))
-	if len(payload.Events) > 0 {
-		events := make([]interface{}, len(payload.Events))
-		for i, event := range payload.Events {
-			event.SessionID = sessionID
-			event.CreatedAt = now
-			events[i] = event
+		if len(createErr.details) > 0 {
+			response["details"] = createErr.details
 		}
-
-		eventInsertResult, err := h.db.Events.InsertMany(context.Background(), events)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to persist session events",
-				"code":  "DB_EVENT_INSERT_ERROR",
-			})
-			return
-		}
-
-		for _, insertedID := range eventInsertResult.InsertedIDs {
-			if objectID, ok := insertedID.(primitive.ObjectID); ok {
-				eventRefs = append(eventRefs, objectID)
-			}
-		}
-	}
-
-	// Create session document
-	session := models.Session{
-		ProjectID:   payload.ProjectID,
-		SessionID:   sessionID,
-		URL:         payload.URL,
-		Title:       payload.Title,
-		Timestamp:   payload.Timestamp,
-		Duration:    payload.Duration,
-		Environment: payload.Environment,
-		App:         payload.App,
-		Error:       payload.Error,
-		Media:       payload.Media,
-		Tags:        []string{},
-		Comments:    []models.SessionComment{},
-		Operations: []models.SessionOperation{
-			{
-				Action: "session-created",
-				Actor:  "system",
-				At:     now,
-				Details: map[string]interface{}{
-					"eventRefs": len(eventRefs),
-				},
-			},
-		},
-		EventRefs:     eventRefs,
-		Stats:         stats,
-		TriageSummary: triageSummary,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}
-
-	// Insert session metadata.
-	result, err := h.db.Sessions.InsertOne(context.Background(), session)
-	if err != nil {
-		if len(eventRefs) > 0 {
-			_, _ = h.db.Events.DeleteMany(context.Background(), bson.M{"sessionId": sessionID})
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to create session",
-			"code":  "DB_INSERT_ERROR",
-		})
+		c.JSON(createErr.status, response)
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"sessionId": sessionID,
-		"id":        result.InsertedID,
-		"eventRefs": len(eventRefs),
-		"storage":   storageStatus,
+		"sessionId": result.sessionID,
+		"id":        result.insertedID,
+		"eventRefs": result.eventRefs,
+		"storage":   result.storageStatus,
 	})
 }
 
@@ -684,6 +720,12 @@ func (h *SessionHandler) buildSignedMediaURLs(media models.Media) map[string]int
 	}
 
 	result := map[string]interface{}{}
+
+	if media.ScreenshotKey != "" {
+		if signedURL, err := h.minioClient.GetPresignedURL(context.Background(), media.ScreenshotKey, time.Hour); err == nil {
+			result["screenshot"] = signedURL
+		}
+	}
 
 	if media.VideoKey != "" {
 		if signedURL, err := h.minioClient.GetPresignedURL(context.Background(), media.VideoKey, time.Hour); err == nil {

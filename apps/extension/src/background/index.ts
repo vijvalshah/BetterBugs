@@ -35,7 +35,9 @@ type TabCaptureState = {
   environment?: EnvironmentInfo;
   captureStatus: TabCaptureStatus;
   screenshotPreview?: ScreenshotPreview;
+  screenshotDataUrl?: string;
   videoPreview?: VideoPreview;
+  videoBlob?: Blob;
   videoRecorder?: MediaRecorder;
   videoChunks?: Blob[];
   videoStartTime?: number;
@@ -546,6 +548,152 @@ function normalizeApiBaseUrl(apiBaseUrl: string): string {
     return trimmed.slice(0, -'/sessions'.length);
   }
   return trimmed;
+}
+
+type UploadArtifactRequest = {
+  contentType: string;
+  sizeBytes?: number;
+};
+
+type UploadDomSnapshotRequest = {
+  count: number;
+  contentType: string;
+  sizeBytes?: number;
+};
+
+type UploadSessionRequest = {
+  projectId: string;
+  artifacts: {
+    screenshot?: UploadArtifactRequest;
+    video?: UploadArtifactRequest;
+    domSnapshots?: UploadDomSnapshotRequest;
+  };
+};
+
+type UploadArtifactResponse = {
+  key: string;
+  uploadUrl: string;
+  method: string;
+  contentType: string;
+  sizeBytes?: number;
+};
+
+type UploadSessionResponse = {
+  uploadId: string;
+  sessionId: string;
+  expiresAt: string;
+  artifacts: {
+    screenshot?: UploadArtifactResponse;
+    video?: UploadArtifactResponse;
+    domSnapshots?: UploadArtifactResponse[];
+  };
+};
+
+async function createUploadSession(
+  config: ExtensionConfig,
+  request: UploadSessionRequest,
+): Promise<{ ok: boolean; message: string; data?: UploadSessionResponse }> {
+  const baseUrl = normalizeApiBaseUrl(config.apiBaseUrl);
+  try {
+    const response = await fetch(`${baseUrl}/uploads/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Project-Key': config.projectKey,
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      return {
+        ok: false,
+        message: payload.error || `Upload session failed (${response.status}).`,
+      };
+    }
+
+    const data = (await response.json()) as UploadSessionResponse;
+    return { ok: true, message: 'Upload session created.', data };
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return { ok: false, message: `Upload session failed: ${details}` };
+  }
+}
+
+async function uploadArtifact(artifact: UploadArtifactResponse, blob: Blob): Promise<{ ok: boolean; message: string }> {
+  try {
+    const response = await fetch(artifact.uploadUrl, {
+      method: artifact.method || 'PUT',
+      headers: {
+        'Content-Type': artifact.contentType,
+      },
+      body: blob,
+    });
+
+    if (!response.ok) {
+      return { ok: false, message: `Upload failed (${response.status}).` };
+    }
+
+    return { ok: true, message: 'Upload completed.' };
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return { ok: false, message: `Upload failed: ${details}` };
+  }
+}
+
+async function finalizeUploadSession(
+  config: ExtensionConfig,
+  uploadId: string,
+  payload: SessionPayload,
+): Promise<UploadResult> {
+  const normalizedPayload = normalizeSessionPayloadForUpload(payload, config);
+  const uploadPayload = {
+    ...normalizedPayload,
+    events: normalizedPayload.events.map(({ id: _id, ...event }) => event),
+  };
+
+  const baseUrl = normalizeApiBaseUrl(config.apiBaseUrl);
+  try {
+    const response = await fetch(`${baseUrl}/uploads/sessions/${uploadId}/finalize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Project-Key': config.projectKey,
+      },
+      body: JSON.stringify(uploadPayload),
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      return {
+        ok: false,
+        message: body.error || `Finalize failed (${response.status}).`,
+        recoverable: response.status >= 500,
+      };
+    }
+
+    const result = (await response.json()) as { sessionId?: string; warnings?: string[] };
+    const warningMessage = result.warnings && result.warnings.length > 0
+      ? ` Finalize warnings: ${result.warnings.join(' | ')}`
+      : '';
+    return {
+      ok: true,
+      message: `Session finalized successfully.${warningMessage}`,
+      sessionId: result.sessionId,
+    };
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return {
+      ok: false,
+      message: `Finalize failed: ${details}`,
+      recoverable: true,
+    };
+  }
+}
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl);
+  return await response.blob();
 }
 
 async function persistVideo(

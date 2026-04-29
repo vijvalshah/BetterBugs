@@ -362,6 +362,11 @@ export function normalizeSessionPayloadForUpload(
     events: normalizeEvents(rawPayload.events),
     media: {
       hasReplay: Boolean(rawMedia.hasReplay),
+      screenshotKey: typeof rawMedia.screenshotKey === 'string' ? rawMedia.screenshotKey : undefined,
+      videoKey: typeof rawMedia.videoKey === 'string' ? rawMedia.videoKey : undefined,
+      domSnapshots: Array.isArray(rawMedia.domSnapshots)
+        ? rawMedia.domSnapshots.filter((key) => typeof key === 'string')
+        : undefined,
       metadata: rawMedia.metadata as SessionPayload['media']['metadata'],
     },
   };

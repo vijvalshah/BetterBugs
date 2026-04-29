@@ -206,6 +206,12 @@ func (h *SessionHandler) deleteSessionMedia(ctx context.Context, media models.Me
 		return nil
 	}
 
+	if media.ScreenshotKey != "" {
+		if err := h.minioClient.DeleteObject(ctx, media.ScreenshotKey); err != nil {
+			return err
+		}
+	}
+
 	if media.VideoKey != "" {
 		if err := h.minioClient.DeleteObject(ctx, media.VideoKey); err != nil {
 			return err

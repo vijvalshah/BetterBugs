@@ -53,6 +53,15 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 			media.POST("/screenshots", mediaHandler.StoreScreenshot)
 			media.POST("/videos", mediaHandler.StoreVideo)
 		}
+
+		uploads := v1.Group("/uploads")
+		uploads.Use(middleware.APIKeyAuth(db, cfg))
+		uploads.Use(middleware.RateLimit(cfg))
+		{
+			uploadHandler := handlers.NewUploadSessionHandler(db, minioClient, cfg)
+			uploads.POST("/sessions", uploadHandler.CreateUploadSession)
+			uploads.POST("/sessions/:id/finalize", uploadHandler.FinalizeUploadSession)
+		}
 	}
 
 	// Swagger documentation

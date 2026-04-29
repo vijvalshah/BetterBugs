@@ -50,12 +50,25 @@ func (m *MinIOClient) PutObject(ctx context.Context, key string, reader io.Reade
 	return err
 }
 
+func (m *MinIOClient) GetPresignedPutURL(ctx context.Context, key string, expires time.Duration) (string, error) {
+	url, err := m.client.PresignedPutObject(ctx, m.bucket, key, expires)
+	if err != nil {
+		return "", err
+	}
+	return url.String(), nil
+}
+
 func (m *MinIOClient) GetPresignedURL(ctx context.Context, key string, expires time.Duration) (string, error) {
 	url, err := m.client.PresignedGetObject(ctx, m.bucket, key, expires, nil)
 	if err != nil {
 		return "", err
 	}
 	return url.String(), nil
+}
+
+func (m *MinIOClient) StatObject(ctx context.Context, key string) error {
+	_, err := m.client.StatObject(ctx, m.bucket, key, minio.StatObjectOptions{})
+	return err
 }
 
 func (m *MinIOClient) DeleteObject(ctx context.Context, key string) error {

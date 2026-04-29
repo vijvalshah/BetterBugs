@@ -87,6 +87,9 @@ export interface SessionPayload {
   events: CaptureEvent[];
   media: {
     hasReplay: boolean;
+    screenshotKey?: string;
+    videoKey?: string;
+    domSnapshots?: string[];
     metadata?: CaptureMediaMetadata;
   };
 }
@@ -104,14 +107,16 @@ export interface TabCaptureStatus {
 export interface ScreenshotPreview {
   dataUrl: string;
   capturedAt: string;
-  storedPath?: string;
+  uploadedKey?: string;
+  uploadState?: 'idle' | 'uploading' | 'uploaded' | 'failed';
 }
 
 export interface VideoPreview {
   objectUrl: string;
   capturedAt: string;
   durationMs?: number;
-  storedPath?: string;
+  uploadedKey?: string;
+  uploadState?: 'idle' | 'uploading' | 'uploaded' | 'failed';
 }
 
 export interface CaptureMediaMetadata {
@@ -214,7 +219,7 @@ export interface ExtensionConfig {
 export const DEFAULT_CONFIG: ExtensionConfig = {
   apiBaseUrl: 'http://localhost:3001/api/v1',
   projectId: 'dev-project',
-  projectKey: '',
+  projectKey: 'dev-key',
   captureNetwork: true,
   captureConsole: true,
   captureErrors: true,
@@ -293,22 +298,6 @@ export interface BackgroundMessage<T = unknown> {
     | 'BC_CONFIG_SAVE'
     | 'BC_CAPTURE_PREVIEW_REQUEST'
     | 'BC_CAPTURE_PREVIEW_RESPONSE'
-    | 'BC_CAPTURE_START_REQUEST'
-    | 'BC_CAPTURE_START_RESPONSE'
-    | 'BC_CAPTURE_STOP_REQUEST'
-    | 'BC_CAPTURE_STOP_RESPONSE'
-    | 'BC_CAPTURE_STATE_REQUEST'
-    | 'BC_CAPTURE_STATE_RESPONSE'
-    | 'BC_CAPTURE_SCREENSHOT_REQUEST'
-    | 'BC_CAPTURE_SCREENSHOT_RESPONSE'
-    | 'BC_CAPTURE_SCREENSHOT_PREVIEW_REQUEST'
-    | 'BC_CAPTURE_SCREENSHOT_PREVIEW_RESPONSE'
-    | 'BC_CAPTURE_VIDEO_START_REQUEST'
-    | 'BC_CAPTURE_VIDEO_START_RESPONSE'
-    | 'BC_CAPTURE_VIDEO_STOP_REQUEST'
-    | 'BC_CAPTURE_VIDEO_STOP_RESPONSE'
-    | 'BC_CAPTURE_VIDEO_PREVIEW_REQUEST'
-    | 'BC_CAPTURE_VIDEO_PREVIEW_RESPONSE'
     | 'BC_GET_SESSIONS_REQUEST'
     | 'BC_GET_SESSIONS_RESPONSE'
     | 'BC_GET_SESSION_DETAIL_REQUEST'

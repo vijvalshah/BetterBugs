@@ -24,8 +24,12 @@ export interface ApiSession {
   commentCount: number;
   media: {
     hasReplay: boolean;
+    screenshotKey?: string;
+    videoKey?: string;
+    domSnapshots?: string[];
   };
   signedMedia?: {
+    screenshot?: string;
     video?: string;
     domSnapshots?: string[];
   };

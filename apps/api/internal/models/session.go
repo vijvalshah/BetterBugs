@@ -96,6 +96,7 @@ type ErrorInfo struct {
 }
 
 type Media struct {
+	ScreenshotKey string   `json:"screenshotKey,omitempty" bson:"screenshotKey,omitempty"`
 	VideoKey     string   `json:"videoKey,omitempty" bson:"videoKey,omitempty"`
 	DOMSnapshots []string `json:"domSnapshots,omitempty" bson:"domSnapshots,omitempty"`
 	HasReplay    bool     `json:"hasReplay" bson:"hasReplay"`
