@@ -6,6 +6,94 @@
 
 ---
 
+## 📊 Progress Tracker
+
+**Last updated:** 2026-04-29
+
+### Owner B (Frontend) — Week 1 ✅ Mostly Done
+
+**Dashboard Scaffold (`apps/dashboard/`):**
+- [x] Next.js 14.2.28 + React 18.3 + TypeScript 5.7 + Tailwind CSS 3.4 (stable, secure versions)
+- [x] PostCSS + Autoprefixer config
+- [x] Dark-mode-first CSS variables in `globals.css`
+- [x] Root layout with sticky header, Inter font, branded logo
+- [x] API client (`lib/api.ts`) — list, get, delete, tags, comments, with `ApiSession` type
+- [x] Utility helpers (`lib/utils.ts` — `cn()` for Tailwind class merging)
+- [x] **Build passes:** `npm run build` compiles successfully (4 routes)
+
+**UI Primitives (`components/ui/`):**
+- [x] `Button` — 6 variants, 4 sizes, focus rings
+- [x] `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`
+- [x] `Badge` — 6 variants (default, secondary, destructive, outline, success, warning)
+- [x] `Skeleton` — animated loading placeholder
+
+**Sessions List Page (`app/page.tsx`):**
+- [x] `SessionCard` — error/AI badges, browser/timestamp/tags, stats, hover-reveal actions
+- [x] `FilterBar` — URL search, tag filter, refresh, clear
+- [x] `SessionSkeletonList` — proper loading state (no spinners)
+- [x] Empty state with icon + helpful copy
+- [x] Error state for API failures
+
+**Session Detail Page (`app/sessions/[id]/page.tsx`):**
+- [x] Header with title, URL, browser/OS badges, error type badge
+- [x] Error block with stack trace
+- [x] AI analysis preview banner with confidence
+- [x] Tab system (Console | Network | State | AI)
+- [x] `ConsolePanel` — level filters, color-coded entries, stack expansion
+- [x] `NetworkPanel` — method/status badges, click-to-expand request/response viewer
+- [x] `AiPanel` — summary, root cause, suggested files (copy buttons), actions, code context, traces
+- [x] Right sidebar — stats grid, triage card, session ID
+- [x] Copy share link button
+
+### What's Left for Owner B
+
+**Week 2:**
+- [ ] Video player component with HTML5 controls + speed (0.5x, 1x, 2x)
+- [ ] Synced timeline scrubber with event markers (console=gray, error=red, network=blue)
+- [ ] State panel (currently placeholder) — JSON tree with diff between snapshots
+- [ ] DOM replay component (iframe with snapshot)
+- [ ] Inline tag editor on detail page
+- [ ] Comments thread UI on detail page
+
+**Week 2-3 (Extension):**
+- [ ] Extension popup redesign — modern layout, recent sessions list
+- [ ] Options page redesign — tabs (General | AI | Privacy | Advanced)
+- [ ] Toggle between server-side AI vs extension AI
+- [ ] Wire up `POST /sessions/:id/analyze` (waiting on Owner A)
+- [ ] GitHub export — full implementation with templated issue body
+- [ ] "Open in Dashboard" deep link from extension
+
+**Week 3:**
+- [ ] Landing page (hero, feature grid, MCP/BYOM/OSS badges)
+- [ ] Public share page React version
+- [ ] Mobile responsive polish
+
+### Owner A (Backend) — Pending
+
+- [ ] `POST /api/v1/sessions/:id/analyze` — backend AI endpoint
+- [ ] `GET /api/v1/sessions/:id/analysis` — cached analysis
+- [ ] `GET /api/v1/projects/:id/stats` — dashboard stats
+- [ ] `apps/mcp-server/` — MCP server with 5 tools
+- [ ] AI rate limiting middleware
+
+### How to Run Dashboard Locally
+
+```bash
+cd apps/dashboard
+npm install
+cp .env.example .env.local   # set NEXT_PUBLIC_API_BASE_URL + NEXT_PUBLIC_PROJECT_KEY
+npm run dev                   # http://localhost:3002
+```
+
+### Stack Decisions
+
+- **Next.js 14.2.28** (not 15) — Node 18.16 compat, security patches applied
+- **React 18.3** (not 19) — Next.js 14 compat
+- **Tailwind v3.4** (not v4) — stable, mature ecosystem
+- **No external UI lib** — custom shadcn-style primitives in `components/ui/` for full control
+
+---
+
 ## Owner A (Backend / Infrastructure)
 **Directories:** `apps/api/` (new endpoints only), `apps/mcp-server/` (new app)
 
