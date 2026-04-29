@@ -1,24 +1,42 @@
 # BetterBugs - Complete Setup Guide
 
-## What's Been Built
+## Architecture Overview
 
-# What You Get
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      BetterBugs Architecture                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────────┐   │
+│  │   Browser    │     │   Dashboard  │     │   MCP Server     │   │
+│  │  Extension   │     │  (Next.js)   │     │   (Python)       │   │
+│  │  (Chrome)    │     │   :3002      │     │   (FastMCP)      │   │
+│  └──────┬───────┘     └──────┬───────┘     └────────┬─────────┘   │
+│         │                    │                       │             │
+│         │                    │   HTTP                │  stdio      │
+│         ▼                    ▼                       ▼             │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │                    Go API Server (:3001)                        ││
+│  │  • Sessions CRUD    • Tags & Comments   • Analysis              ││
+│  │  • Media Uploads    • Rate Limiting     • Project Stats         ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│                              │                                       │
+│              ┌───────────────┴───────────────┐                      │
+│              ▼                               ▼                      │
+│  ┌─────────────────────┐         ┌─────────────────────┐           │
+│  │   MongoDB Atlas     │         │   MinIO (optional)  │           │
+│  │   (Persistence)     │         │   (File Storage)    │           │
+│  └─────────────────────┘         └─────────────────────┘           │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-✅ **Go Backend API** (`apps/api`)
-- Gin framework with MongoDB + MinIO
-- Session management (create, list, get, delete, tags, comments)
-- Media uploads (screenshots, videos)
-- Plugin gateway for extension integration
-- API key authentication + rate limiting
-- Swagger documentation
+## What You Get
 
-✅ **Browser Extension** (`apps/extension`)
-- React + TypeScript + Vite
-- Manifest V3 Chrome extension
-- Console, network, and error capture
-- AI-powered analysis
-- Export to GitHub and other destinations
-- Session replay and details view
+- **Go Backend API** (`apps/api`) - Gin framework with MongoDB + MinIO
+- **Browser Extension** (`apps/extension`) - React + TypeScript + Vite
+- **Dashboard** (`apps/dashboard`) - Next.js 14 web interface
+- **MCP Server** (`apps/mcp-server`) - Python FastMCP for agentic workflows
 
 ---
 
@@ -28,199 +46,132 @@
 
 - Go 1.22+
 - Node.js 18+
-- MongoDB (local or hosted — e.g., MongoDB Atlas)
-- Chrome browser (for extension)
+- Python 3.10+
+- MongoDB Atlas or local MongoDB
+- Chrome browser
 
-### 1. Configure Environment
+### Automated Setup
 
+**Windows:**
 ```bash
-cd apps/api
-cp .env.example .env
+.\setup.bat
 ```
 
-Edit `.env` with your hosted MongoDB URI and credentials. For example:
-
+**Mac/Linux:**
 ```bash
-# MongoDB (hosted)
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/bugcatcher
+chmod +x setup.sh
+./setup.sh
 ```
 
-MinIO is optional. If you skip it, media uploads will use local filesystem storage (`MEDIA_STORAGE_DIR`).
+---
 
-If you prefer local infrastructure instead:
+## Manual Setup
 
-```bash
-# Start MongoDB locally
-docker run -d -p 27017:27017 --name bugcatcher-mongo mongo:7
-
-# Start MinIO locally (optional)
-docker run -d -p 9000:9000 -p 9001:9001 --name bugcatcher-minio \
-  -e "MINIO_ROOT_USER=minioadmin" \
-  -e "MINIO_ROOT_PASSWORD=minioadmin" \
-  minio/minio server /data --console-address ":9001"
-```
-
-### 2. Setup and Run API
+### Step 1: API Server
 
 ```bash
+# Navigate to API directory
 cd apps/api
 
-# Install dependencies
+# Install Go dependencies
 go mod tidy
 
-# Configure environment
-cp .env.example .env
-# Edit .env if needed (defaults work for local dev)
+# Copy environment file
+copy .env.example .env
 
-# Run development server
-make dev
-# Or: go run main.go
+# Run the API server
+go run main.go
 ```
 
-API will start on http://localhost:3001
+**API runs on:** http://localhost:3001
 
-### 3. Build and Load Extension
+---
+
+### Step 2: Dashboard
 
 ```bash
+# Navigate to dashboard directory
+cd apps/dashboard
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+```
+
+**Dashboard runs on:** http://localhost:3002
+
+---
+
+### Step 3: Browser Extension
+
+```bash
+# Navigate to extension directory
 cd apps/extension
+
+# Install dependencies
+npm install
+
+# Build extension
 npm run build
 ```
 
-Load in Chrome:
+**Load in Chrome:**
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select `apps/extension/dist`
 
-### 4. Configure Extension
-
-1. Click the extension icon → **Options**
-2. Set configuration:
-   - API Base URL: `http://localhost:3001/api/v1`
-   - Project ID: `dev-project`
-   - Project Key: `dev-key`
-3. Save settings
-
-### 5. Test the Full Flow
-
-1. Open any webpage
-2. Click the extension icon → **Capture Current Session**
-3. View captured sessions via API:
-   ```bash
-   curl http://localhost:3001/api/v1/sessions \
-     -H "X-Project-Key: dev-key"
-   ```
+**Configure Extension:**
+- API Base URL: `http://localhost:3001/api/v1`
+- Project ID: `dev-project`
+- Project Key: `dev-key`
 
 ---
 
-## API Endpoints
-
-### Health
-- `GET /health` - Health check
-
-### Sessions (requires `X-Project-Key` header)
-- `POST /api/v1/sessions` - Create session
-- `GET /api/v1/sessions` - List sessions
-- `GET /api/v1/sessions/:id` - Get session details
-- `DELETE /api/v1/sessions/:id` - Delete session
-- `PATCH /api/v1/sessions/:id/tags` - Update session tags
-- `PATCH /api/v1/sessions/batch/tags` - Batch update tags
-- `POST /api/v1/sessions/:id/comments` - Add comment
-
-### Media
-- `POST /api/v1/media/screenshots` - Store screenshot
-- `POST /api/v1/media/videos` - Store video
-
-### Uploads
-- `POST /api/v1/uploads/sessions` - Create upload session
-- `POST /api/v1/uploads/sessions/:id/finalize` - Finalize upload
-
-### Plugin Gateway (for extension)
-- `GET /api/v1/plugin/v1/manifest` - Get plugin manifest
-- `GET /api/v1/plugin/v1/sessions` - List sessions
-- `GET /api/v1/plugin/v1/sessions/:id` - Get session
-- `POST /api/v1/plugin/v1/exports` - Trigger export
-
-### Documentation
-- Swagger UI: http://localhost:3001/docs/index.html
-
----
-
-## Development
-
-### API Development
+### Step 4: MCP Server (Optional - for Agentic Workflows)
 
 ```bash
-cd apps/api
+# Navigate to MCP server directory
+cd apps/mcp-server
 
-# Run tests
-make test
+# Install Python dependencies
+pip install -r requirements.txt
 
-# Run linter
-make lint
-
-# Generate Swagger docs
-make swagger
-
-# Build binary
-make build
-
-# Build Docker image
-make docker-build
+# Run MCP server (uses stdio transport)
+python server.py
 ```
 
-### Extension Development
-
-```bash
-cd apps/extension
-
-# Development mode (with hot reload)
-npm run dev
-
-# Build for production
-npm run build
-
-# Run tests
-npm run test
-
-# Run tests in watch mode
-npm run test:watch
-```
+**MCP Server Tools:**
+- `list_sessions` - List sessions with pagination
+- `get_session` - Get a specific session
+- `create_session` - Create a new session
+- `delete_session` - Delete a session
+- `update_session_tags` - Tag sessions
+- `analyze_session` - Trigger AI analysis
+- `get_session_analysis` - Get cached analysis
+- `get_project_stats` - Get project statistics
+- `comprehensive_analysis` - Full analysis with recommendations
+- `health_check` - Check API connectivity
+- `export_sessions` - Export sessions to JSON/CSV/HAR
 
 ---
 
-## Project Structure
+## Testing
 
+```bash
+# Health check
+curl http://localhost:3001/health
+
+# List sessions
+curl http://localhost:3001/api/v1/sessions -H "X-Project-Key: dev-key"
+
+# Get project stats
+curl http://localhost:3001/api/v1/projects/dev-project/stats -H "X-Project-Key: dev-key"
 ```
-apps/
-├── api/                    # Go backend API
-│   ├── internal/
-│   │   ├── config/         # Environment config
-│   │   ├── database/       # MongoDB connection
-│   │   ├── handlers/       # HTTP handlers
-│   │   ├── middleware/     # Auth, rate limiting
-│   │   ├── models/         # Data models
-│   │   ├── routes/         # Route setup
-│   │   └── storage/        # MinIO client
-│   ├── main.go             # Entry point
-│   ├── Dockerfile          # Container build
-│   ├── Makefile            # Build commands
-│   └── README.md           # API documentation
-│
-└── extension/              # Browser extension
-    ├── src/
-    │   ├── background/     # Service worker
-    │   ├── content/        # Content scripts
-    │   ├── popup/          # Popup UI
-    │   ├── options/        # Options page
-    │   ├── session-details/# Session details page
-    │   ├── shared/         # Shared utilities
-    │   └── manifest.ts     # Extension manifest
-    ├── dist/               # Build output
-    ├── package.json
-    ├── vite.config.ts
-    └── tsconfig.json
-```
+
+Dashboard available at: http://localhost:3002
 
 ---
 
@@ -233,22 +184,18 @@ apps/
 PORT=3001
 GIN_MODE=debug
 
-# MongoDB (hosted example — MongoDB Atlas, etc.)
+# MongoDB
 MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/bugcatcher
-# For local MongoDB: MONGODB_URI=mongodb://localhost:27017
 MONGODB_DATABASE=bugcatcher
 SEED_PROJECT_ID=dev-project
 SEED_PROJECT_API_KEY=dev-key
 
-# MinIO (optional — media falls back to local filesystem if unavailable)
+# MinIO (optional)
 MINIO_ENDPOINT=localhost:9000
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=bugcatcher-sessions
 MINIO_USE_SSL=false
-
-# Local media storage (used when MinIO is not configured)
-MEDIA_STORAGE_DIR=storage/media
 
 # Security
 API_KEY_SECRET=your-secret-key-here
@@ -257,53 +204,18 @@ ENCRYPTION_KEY=your-32-byte-key-here
 # Rate Limiting
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60
-
-# Storage Policy
-STORAGE_QUOTA_SESSIONS=1000
-STORAGE_RETENTION_DAYS=30
-STORAGE_WARNING_RATIO=0.90
 ```
 
----
-
-## Testing
-
-### Test API
+### MCP Server (`apps/mcp-server/.env`)
 
 ```bash
-# Health check
-curl http://localhost:3001/health
+# API Configuration
+BETTERBUGS_API_URL=http://localhost:3001
+BETTERBUGS_API_KEY=dev-key
 
-# Create session
-curl -X POST http://localhost:3001/api/v1/sessions \
-  -H "Content-Type: application/json" \
-  -H "X-Project-Key: dev-key" \
-  -d '{
-    "projectId": "dev-project",
-    "url": "https://example.com",
-    "timestamp": "2026-03-26T00:00:00Z",
-    "environment": {
-      "browser": "Chrome",
-      "browserVersion": "122.0",
-      "os": "macOS",
-      "osVersion": "14",
-      "viewport": {"width": 1920, "height": 1080},
-      "language": "en-US"
-    },
-    "events": [],
-    "media": {"hasReplay": false}
-  }'
-
-# List sessions
-curl http://localhost:3001/api/v1/sessions \
-  -H "X-Project-Key: dev-key"
-```
-
-### Test Extension
-
-```bash
-cd apps/extension
-npm run test
+# Optional: AI Providers
+# ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-...
 ```
 
 ---
@@ -311,53 +223,66 @@ npm run test
 ## Troubleshooting
 
 **API won't start:**
-```bash
-# Check your MongoDB connection string is correct
-cd apps/api
-cat .env | grep MONGODB_URI
-
-# Reset Go dependencies
-cd apps/api
-go mod tidy
-```
+- Check MongoDB connection string in `apps/api/.env`
+- Run `go mod tidy` to reset dependencies
 
 **Extension not loading:**
-- Ensure `apps/extension/dist` exists after running `npm run build`
+- Ensure `apps/extension/dist` exists after `npm run build`
 - Check Chrome Developer mode is enabled
-- Check manifest.json is valid in the dist folder
 
-**CORS errors:**
-- Ensure API is running on `localhost:3001`
-- Check `GIN_MODE` is set to `debug` for local development
+**Dashboard won't start:**
+- Ensure Node.js 18+ is installed
+- Run `npm install` in `apps/dashboard` directory
 
-**Rate limiting:**
-- Default: 100 requests per minute per project
-- Adjust `RATE_LIMIT_REQUESTS` and `RATE_LIMIT_WINDOW` in `.env`
+**MCP Server issues:**
+- Ensure Python 3.10+ is installed
+- Run `pip install -r requirements.txt`
+- Check API is running on port 3001
 
 ---
 
-## Features
+## Project Structure
 
-### API Features
-- ✅ Session CRUD operations
-- ✅ Event storage (console, network, error)
-- ✅ Media upload (screenshots, videos)
-- ✅ MongoDB integration
-- ✅ MinIO object storage
-- ✅ API key authentication
-- ✅ Rate limiting
-- ✅ Storage policy enforcement
-- ✅ Swagger documentation
-- ✅ Docker support
-- ✅ Extension capture (console, network, errors, screenshot, video)
-- ✅ Upload session, direct artifact upload, finalize
+```
+apps/
+├── api/                    # Go backend API
+│   ├── internal/           # Handlers, models, middleware
+│   ├── main.go             # Entry point
+│   ├── .env.example        # Environment template
+│   └── Makefile            # Build commands
+│
+├── dashboard/              # Next.js Dashboard
+│   ├── app/                # Next.js app router
+│   ├── package.json
+│   └── .env.example
+│
+├── extension/              # Chrome Extension
+│   ├── src/                # Source code
+│   ├── dist/               # Build output
+│   └── package.json
+│
+└── mcp-server/             # Python MCP Server
+    ├── server.py           # Main MCP server
+    ├── config.py           # Configuration
+    ├── requirements.txt    # Python dependencies
+    └── .env.example
+```
 
-### Extension Features
-- ✅ Console capture (log, warn, error, info)
-- ✅ Network request capture
-- ✅ Error tracking
-- ✅ AI-powered session analysis
-- ✅ Export to GitHub issues
-- ✅ Session tags and comments
-- ✅ Screenshot and video recording
-- ✅ Keyboard shortcut (Ctrl+Shift+B / Cmd+Shift+B)
+---
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/v1/sessions` | GET | List sessions |
+| `/api/v1/sessions` | POST | Create session |
+| `/api/v1/sessions/:id` | GET | Get session |
+| `/api/v1/sessions/:id` | DELETE | Delete session |
+| `/api/v1/sessions/:id/tags` | PATCH | Update tags |
+| `/api/v1/sessions/:id/analyze` | POST | Trigger analysis |
+| `/api/v1/sessions/:id/analysis` | GET | Get analysis |
+| `/api/v1/projects/:id/stats` | GET | Project stats |
+| `/docs/*any` | GET | Swagger docs |
+
+All endpoints (except `/health`) require `X-Project-Key` header.
