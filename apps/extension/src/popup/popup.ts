@@ -6,7 +6,6 @@ import {
   type ShareLinkPermission,
   type ScreenshotPreview,
   type TabCaptureStatus,
-  type VideoPreview,
 } from '../shared/types';
 import type { ApiSession, ApiSessionDetail } from '../shared/api-client';
 
@@ -14,11 +13,7 @@ const captureButton = document.getElementById('captureButton') as HTMLButtonElem
 const screenshotCaptureButton = document.getElementById('screenshotCaptureButton') as HTMLButtonElement;
 const screenshotPreviewImageEl = document.getElementById('screenshotPreviewImage') as HTMLImageElement;
 const screenshotPreviewMetaEl = document.getElementById('screenshotPreviewMeta') as HTMLDivElement;
-const videoPreviewMetaEl = document.getElementById('videoPreviewMeta') as HTMLDivElement;
-const videoPreviewPlayerEl = document.getElementById('videoPreviewPlayer') as HTMLVideoElement;
-const videoStartButtonEl = document.getElementById('videoStartButton') as HTMLButtonElement;
-const videoStopButtonEl = document.getElementById('videoStopButton') as HTMLButtonElement;
-const videoTimerEl = document.getElementById('videoTimer') as HTMLDivElement;
+
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const capturePreviewEl = document.getElementById('capturePreview') as HTMLDivElement;
 const configSummaryEl = document.getElementById('configSummary') as HTMLDivElement;
@@ -818,40 +813,7 @@ function renderScreenshotPreview(preview?: ScreenshotPreview): void {
   screenshotPreviewImageEl.style.display = 'block';
 }
 
-function renderVideoPreview(preview?: VideoPreview): void {
-  if (!preview) {
-    videoPreviewMetaEl.textContent = 'No recording captured yet.';
-    videoPreviewPlayerEl.style.display = 'none';
-    videoPreviewPlayerEl.src = '';
-    return;
-  }
 
-  videoPreviewMetaEl.textContent = `Recorded at ${new Date(preview.capturedAt).toLocaleString()}`;
-  videoPreviewPlayerEl.src = preview.objectUrl;
-  videoPreviewPlayerEl.style.display = 'block';
-}
-
-async function loadVideoPreview(): Promise<void> {
-  try {
-    const response = await sendMessageWithTimeout<BackgroundMessage>({
-      type: 'BC_CAPTURE_VIDEO_PREVIEW_REQUEST',
-    }, 5000);
-    const payload = response.payload as { ok?: boolean; preview?: VideoPreview } | undefined;
-    if (!payload?.preview) {
-      return;
-    }
-    renderVideoPreview(payload.preview);
-  } catch {
-    // Ignore preview failures to keep popup responsive.
-  }
-}
-
-function formatRecordingTimer(durationMs: number): string {
-  const totalSeconds = Math.floor(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
 
 async function loadScreenshotPreview(): Promise<void> {
   try {
@@ -1665,80 +1627,7 @@ screenshotCaptureButton.addEventListener('click', async () => {
   }
 });
 
-let recordingTimerId: number | undefined;
-let recordingStartTime: number | undefined;
 
-function startRecordingTimer(): void {
-  recordingStartTime = Date.now();
-  videoTimerEl.textContent = 'Recording 0:00';
-  recordingTimerId = window.setInterval(() => {
-    if (!recordingStartTime) {
-      return;
-    }
-    const elapsed = Date.now() - recordingStartTime;
-    videoTimerEl.textContent = `Recording ${formatRecordingTimer(elapsed)}`;
-  }, 1000);
-}
-
-function stopRecordingTimer(): void {
-  if (recordingTimerId !== undefined) {
-    window.clearInterval(recordingTimerId);
-    recordingTimerId = undefined;
-  }
-  recordingStartTime = undefined;
-  videoTimerEl.textContent = '';
-}
-
-videoStartButtonEl.addEventListener('click', async () => {
-  videoStartButtonEl.disabled = true;
-  setStatus('Starting recording...');
-
-  try {
-    const response = await sendMessageWithTimeout<BackgroundMessage>({
-      type: 'BC_CAPTURE_VIDEO_START_REQUEST',
-    }, 20_000);
-    const payload = response.payload as { ok?: boolean; message?: string } | undefined;
-    if (!payload?.ok) {
-      setStatus(payload?.message ?? 'Failed to start recording.');
-      return;
-    }
-    setStatus(payload.message ?? 'Recording started.');
-    videoStartButtonEl.style.display = 'none';
-    videoStopButtonEl.style.display = 'block';
-    startRecordingTimer();
-  } catch (error: unknown) {
-    setStatus(error instanceof Error ? error.message : 'Failed to start recording.');
-  } finally {
-    videoStartButtonEl.disabled = false;
-  }
-});
-
-videoStopButtonEl.addEventListener('click', async () => {
-  videoStopButtonEl.disabled = true;
-  setStatus('Stopping recording...');
-
-  try {
-    const response = await sendMessageWithTimeout<BackgroundMessage>({
-      type: 'BC_CAPTURE_VIDEO_STOP_REQUEST',
-    }, 20_000);
-    const payload = response.payload as { ok?: boolean; message?: string; preview?: VideoPreview } | undefined;
-    if (!payload?.ok) {
-      setStatus(payload?.message ?? 'Failed to stop recording.');
-      return;
-    }
-    setStatus(payload.message ?? 'Recording stopped.');
-    if (payload.preview) {
-      renderVideoPreview(payload.preview);
-    }
-    videoStopButtonEl.style.display = 'none';
-    videoStartButtonEl.style.display = 'block';
-  } catch (error: unknown) {
-    setStatus(error instanceof Error ? error.message : 'Failed to stop recording.');
-  } finally {
-    stopRecordingTimer();
-    videoStopButtonEl.disabled = false;
-  }
-});
 
 captureButton.addEventListener('click', async () => {
   captureButton.disabled = true;
@@ -2056,6 +1945,6 @@ void loadConfig();
 void loadCapturePreview();
 void loadCaptureState();
 void loadScreenshotPreview();
-void loadVideoPreview();
+
 void loadShortcutHint();
 void loadSessionList();

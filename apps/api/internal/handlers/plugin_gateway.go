@@ -147,11 +147,24 @@ func (h *PluginGatewayHandler) GetSession(c *gin.Context) {
 		return
 	}
 
+	// Fetch events so MCP tools have full context (console, network, errors, state).
+	var events []models.Event
+	if cursor, err := h.db.Events.Find(context.Background(), bson.M{"sessionId": sessionID}); err == nil {
+		defer cursor.Close(context.Background())
+		if decodeErr := cursor.All(context.Background(), &events); decodeErr != nil {
+			events = []models.Event{}
+		}
+	} else {
+		events = []models.Event{}
+	}
+
 	signedMedia := h.signMedia(session.Media)
 
 	c.JSON(http.StatusOK, gin.H{
-		"session":   session,
-		"artifacts": signedMedia,
+		"session":    session,
+		"events":     events,
+		"eventCount": len(events),
+		"artifacts":  signedMedia,
 	})
 }
 
