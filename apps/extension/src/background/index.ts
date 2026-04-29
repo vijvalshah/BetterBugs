@@ -209,6 +209,9 @@ function normalizeConfig(raw: Partial<ExtensionConfig> | undefined): ExtensionCo
   return {
     ...DEFAULT_CONFIG,
     ...(raw ?? {}),
+    captureNetwork: true,
+    captureConsole: true,
+    captureErrors: true,
     ai: {
       ...DEFAULT_CONFIG.ai,
       ...((raw?.ai ?? {}) as Partial<ExtensionConfig['ai']>),

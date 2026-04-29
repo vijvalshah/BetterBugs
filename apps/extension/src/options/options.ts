@@ -95,9 +95,9 @@ function fillForm(config: ExtensionConfig): void {
   apiBaseUrlInput.value = config.apiBaseUrl;
   projectIdInput.value = config.projectId;
   projectKeyInput.value = config.projectKey;
-  captureNetworkInput.checked = config.captureNetwork;
-  captureConsoleInput.checked = config.captureConsole;
-  captureErrorsInput.checked = config.captureErrors;
+  captureNetworkInput.checked = config.captureNetwork ?? DEFAULT_CONFIG.captureNetwork;
+  captureConsoleInput.checked = config.captureConsole ?? DEFAULT_CONFIG.captureConsole;
+  captureErrorsInput.checked = config.captureErrors ?? DEFAULT_CONFIG.captureErrors;
   aiEnabledInput.checked = config.ai.enabled;
   aiProviderInput.value = config.ai.provider;
   aiModelInput.value = config.ai.model;
