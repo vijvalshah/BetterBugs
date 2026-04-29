@@ -458,6 +458,13 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
   const state = getTabState(tabId);
   const config = await getConfig();
 
+  // Capture screenshot automatically if not already captured
+  if (!state.screenshotDataUrl) {
+    console.log('[BetterBugs] No screenshot yet, capturing now...');
+    const screenshotResult = await captureScreenshot();
+    console.log('[BetterBugs] Screenshot capture result:', screenshotResult.ok);
+  }
+
   sendStatusUpdate('uploading', 'Capturing and uploading...');
 
   if (!config.projectKey) {
@@ -497,12 +504,16 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
 
   if (hasArtifacts) {
     const uploadSession = await createUploadSession(config, request);
-    if (!uploadSession.ok || !uploadSession.data) {
+    // If MinIO is not configured (storage unavailable), fall back to direct upload without artifacts
+    if (!uploadSession.ok && uploadSession.message.includes('storage')) {
+      console.log('[BetterBugs] MinIO not available, uploading session without artifacts...');
+      result = await uploadSessionPayload(payload, config);
+    } else if (!uploadSession.ok || !uploadSession.data) {
       sendStatusUpdate('error', uploadSession.message);
       return { ok: false, message: uploadSession.message };
-    }
-
-    const artifacts = uploadSession.data.artifacts;
+    } else {
+      // Only process artifacts if upload session was created successfully
+      const artifacts = uploadSession.data.artifacts;
 
     if (artifacts.screenshot && blobs.screenshot) {
       if (state.screenshotPreview) {
@@ -547,6 +558,7 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
     }
 
     result = await finalizeUploadSession(config, uploadSession.data.uploadId, payload);
+    }
   } else {
     result = await uploadSessionPayload(payload, config);
     if (!result.ok && result.recoverable) {
@@ -569,6 +581,18 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
   }
 
   sendStatusUpdate('success', result.message);
+
+  // Save screenshot to session_images folder locally
+  console.log('[BetterBugs] Session upload success, sessionId:', result.sessionId, 'screenshotDataUrl exists:', !!state.screenshotDataUrl);
+  if (result.sessionId && state.screenshotDataUrl) {
+    console.log('[BetterBugs] Saving screenshot to session_images...');
+    const saveResult = await saveScreenshotToSessionImages(config, result.sessionId, state.screenshotDataUrl);
+    console.log('[BetterBugs] Save result:', saveResult);
+    if (!saveResult.ok) {
+      console.warn('Failed to save screenshot to session_images:', saveResult.message);
+    }
+  }
+
   cleanupTabState(tabId);
   tabState.set(tabId, {
     buffer: new RollingCaptureBuffer(BUFFER_WINDOW_MS, MAX_BUFFER_EVENTS),
@@ -948,6 +972,51 @@ async function stopVideoRecording(): Promise<{
   state.videoPreview = preview;
 
   return { ok: true, message: 'Recording stopped.', preview: state.videoPreview };
+}
+
+async function saveScreenshotToSessionImages(
+  config: ExtensionConfig,
+  sessionId: string,
+  screenshotDataUrl: string | undefined,
+): Promise<{ ok: boolean; message: string }> {
+  console.log('[BetterBugs] saveScreenshotToSessionImages called with sessionId:', sessionId);
+
+  if (!screenshotDataUrl) {
+    console.log('[BetterBugs] No screenshotDataUrl provided');
+    return { ok: true, message: 'No screenshot to save locally.' };
+  }
+
+  if (!config.projectKey) {
+    console.log('[BetterBugs] No projectKey configured');
+    return { ok: false, message: 'Project key is empty.' };
+  }
+
+  const baseUrl = normalizeApiBaseUrl(config.apiBaseUrl);
+  console.log('[BetterBugs] Calling API at:', `${baseUrl}/media/screenshots`);
+  try {
+    const response = await fetch(`${baseUrl}/media/screenshots`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Project-Key': config.projectKey,
+      },
+      body: JSON.stringify({
+        dataUrl: screenshotDataUrl,
+        capturedAt: new Date().toISOString(),
+        sessionId: sessionId,
+      }),
+    });
+
+    const payload = (await response.json()) as { ok?: boolean; error?: string; message?: string };
+    if (!response.ok || !payload.ok) {
+      return { ok: false, message: payload.error ?? payload.message ?? 'Failed to save screenshot locally.' };
+    }
+
+    return { ok: true, message: 'Screenshot saved to session_images folder.' };
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return { ok: false, message: `Local save failed: ${details}` };
+  }
 }
 
 async function persistScreenshot(

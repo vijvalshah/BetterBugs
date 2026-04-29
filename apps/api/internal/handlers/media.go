@@ -23,6 +23,7 @@ type ScreenshotRequest struct {
 	CapturedAt string `json:"capturedAt"`
 	TabUrl     string `json:"tabUrl"`
 	TabTitle   string `json:"tabTitle"`
+	SessionID  string `json:"sessionId"`
 }
 
 type VideoRequest struct {
@@ -41,7 +42,7 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request payload",
-			"code":  "INVALID_PAYLOAD",
+			"code": "INVALID_PAYLOAD",
 		})
 		return
 	}
@@ -49,7 +50,7 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if strings.TrimSpace(payload.DataUrl) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Missing screenshot dataUrl",
-			"code":  "MISSING_DATA_URL",
+			"code": "MISSING_DATA_URL",
 		})
 		return
 	}
@@ -58,7 +59,7 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if !found || !strings.HasPrefix(prefix, "data:image/") || !strings.Contains(prefix, ";base64") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Unsupported screenshot format",
-			"code":  "INVALID_IMAGE_FORMAT",
+			"code": "INVALID_IMAGE_FORMAT",
 		})
 		return
 	}
@@ -66,7 +67,7 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if !strings.HasPrefix(prefix, "data:image/png") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Only PNG screenshots are supported",
-			"code":  "INVALID_IMAGE_FORMAT",
+			"code": "INVALID_IMAGE_FORMAT",
 		})
 		return
 	}
@@ -75,7 +76,7 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Failed to decode screenshot",
-			"code":  "DECODE_FAILED",
+			"code": "DECODE_FAILED",
 		})
 		return
 	}
@@ -91,7 +92,7 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if err := os.MkdirAll(screenshotsDir, 0o755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to prepare screenshot storage",
-			"code":  "STORAGE_INIT_FAILED",
+			"code": "STORAGE_INIT_FAILED",
 		})
 		return
 	}
@@ -101,9 +102,20 @@ func (h *MediaHandler) StoreScreenshot(c *gin.Context) {
 	if err := os.WriteFile(fullPath, decoded, 0o644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to store screenshot",
-			"code":  "STORAGE_WRITE_FAILED",
+			"code": "STORAGE_WRITE_FAILED",
 		})
 		return
+	}
+
+	// Also save to session_images folder if sessionId is provided
+	if strings.TrimSpace(payload.SessionID) != "" {
+		sessionImagesDir := filepath.Join("session_images", payload.SessionID)
+		if err := os.MkdirAll(sessionImagesDir, 0o755); err == nil {
+			sessionScreenshotPath := filepath.Join(sessionImagesDir, "screenshot.png")
+			if err := os.WriteFile(sessionScreenshotPath, decoded, 0o644); err == nil {
+				// Successfully saved to session_images
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -119,7 +131,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request payload",
-			"code":  "INVALID_PAYLOAD",
+			"code": "INVALID_PAYLOAD",
 		})
 		return
 	}
@@ -127,7 +139,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if strings.TrimSpace(payload.DataUrl) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Missing video dataUrl",
-			"code":  "MISSING_DATA_URL",
+			"code": "MISSING_DATA_URL",
 		})
 		return
 	}
@@ -136,7 +148,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if !found || !strings.HasPrefix(prefix, "data:video/") || !strings.Contains(prefix, ";base64") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Unsupported video format",
-			"code":  "INVALID_VIDEO_FORMAT",
+			"code": "INVALID_VIDEO_FORMAT",
 		})
 		return
 	}
@@ -144,7 +156,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if !strings.HasPrefix(prefix, "data:video/webm") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Only WebM videos are supported",
-			"code":  "INVALID_VIDEO_FORMAT",
+			"code": "INVALID_VIDEO_FORMAT",
 		})
 		return
 	}
@@ -153,7 +165,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Failed to decode video",
-			"code":  "DECODE_FAILED",
+			"code": "DECODE_FAILED",
 		})
 		return
 	}
@@ -169,7 +181,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if err := os.MkdirAll(videosDir, 0o755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to prepare video storage",
-			"code":  "STORAGE_INIT_FAILED",
+			"code": "STORAGE_INIT_FAILED",
 		})
 		return
 	}
@@ -179,7 +191,7 @@ func (h *MediaHandler) StoreVideo(c *gin.Context) {
 	if err := os.WriteFile(fullPath, decoded, 0o644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to store video",
-			"code":  "STORAGE_WRITE_FAILED",
+			"code": "STORAGE_WRITE_FAILED",
 		})
 		return
 	}
