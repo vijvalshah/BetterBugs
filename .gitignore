@@ -6,6 +6,7 @@
 # Dependencies
 node_modules/
 vendor/
+__pycache__/
 
 # Build outputs
 dist/
@@ -40,3 +41,6 @@ coverage/
 tmp/
 temp/
 *.tmp
+.mcp.json
+settings.local.json
+*.claude/
