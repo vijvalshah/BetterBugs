@@ -96,6 +96,22 @@ async function requestSessionDetail(sessionId: string): Promise<{
   });
 }
 
+async function requestConfig(): Promise<{ apiBaseUrl?: string } | null> {
+  if (!hasChromeRuntime()) {
+    return null;
+  }
+
+  return await new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: 'BC_CONFIG_REQUEST' } satisfies BackgroundMessage,
+      (response: BackgroundMessage | undefined) => {
+        const payload = (response?.payload ?? {}) as { apiBaseUrl?: string };
+        resolve(payload);
+      },
+    );
+  });
+}
+
 function formatDate(value?: string): string {
   if (!value) return 'unknown';
   const date = new Date(value);
@@ -122,6 +138,48 @@ function renderStatus(text: string, kind: 'info' | 'error' | 'success'): void {
   if (!statusEl) return;
   statusEl.textContent = text;
   statusEl.className = `status ${kind}`;
+}
+
+function normalizeShareBaseUrl(apiBaseUrl: string): string {
+  const trimmed = apiBaseUrl.replace(/\/+$/, '');
+  if (trimmed.endsWith('/api/v1')) {
+    return trimmed.slice(0, -'/api/v1'.length);
+  }
+  return trimmed;
+}
+
+function renderShareLink(sessionId: string, apiBaseUrl?: string): void {
+  if (typeof document === 'undefined') return;
+  const cardEl = document.getElementById('shareCard');
+  const linkEl = document.getElementById('shareLink') as HTMLAnchorElement | null;
+  const copyBtn = document.getElementById('copyShareLink') as HTMLButtonElement | null;
+
+  if (!cardEl || !linkEl || !copyBtn || !apiBaseUrl) {
+    if (cardEl) {
+      cardEl.style.display = 'none';
+    }
+    return;
+  }
+
+  const base = normalizeShareBaseUrl(apiBaseUrl);
+  if (!base) {
+    cardEl.style.display = 'none';
+    return;
+  }
+
+  const shareUrl = `${base}/share/${encodeURIComponent(sessionId)}`;
+  linkEl.href = shareUrl;
+  linkEl.textContent = shareUrl;
+  cardEl.style.display = 'block';
+
+  copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      renderStatus('Share link copied.', 'success');
+    } catch {
+      renderStatus('Failed to copy share link.', 'error');
+    }
+  };
 }
 
 function renderFilters(events: SessionEvent[], filter: string | null): void {
@@ -320,10 +378,12 @@ async function loadSession(sessionId: string): Promise<void> {
     }
 
     const session = payload.session;
+    const config = await requestConfig();
     const orderedEvents = sortEventsByTimestamp(Array.isArray(session.events) ? session.events : []);
     cachedEvents = orderedEvents;
     activeFilter = null;
     renderMeta(session);
+    renderShareLink(session.sessionId, config?.apiBaseUrl);
     renderFilters(cachedEvents, activeFilter);
     renderMedia({ ...session, events: orderedEvents });
     renderEvents(cachedEvents);

@@ -15,6 +15,10 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 	// Health check
 	router.GET("/health", handlers.HealthCheck)
 
+	// Public share view
+	shareHandler := handlers.NewShareHandler(db)
+	router.GET("/share/:id", shareHandler.ShareView)
+
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{

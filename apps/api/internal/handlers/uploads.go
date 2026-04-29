@@ -43,8 +43,8 @@ type UploadDomSnapshotRequest struct {
 type UploadSessionRequest struct {
 	ProjectID string `json:"projectId"`
 	Artifacts struct {
-		Screenshot   *UploadArtifactRequest   `json:"screenshot,omitempty"`
-		Video        *UploadArtifactRequest   `json:"video,omitempty"`
+		Screenshot   *UploadArtifactRequest    `json:"screenshot,omitempty"`
+		Video        *UploadArtifactRequest    `json:"video,omitempty"`
 		DOMSnapshots *UploadDomSnapshotRequest `json:"domSnapshots,omitempty"`
 	} `json:"artifacts"`
 }
@@ -62,30 +62,31 @@ type UploadSessionResponse struct {
 	SessionID string `json:"sessionId"`
 	ExpiresAt string `json:"expiresAt"`
 	Artifacts struct {
-		Screenshot   *UploadArtifactResponse   `json:"screenshot,omitempty"`
-		Video        *UploadArtifactResponse   `json:"video,omitempty"`
-		DOMSnapshots []UploadArtifactResponse  `json:"domSnapshots,omitempty"`
+		Screenshot   *UploadArtifactResponse  `json:"screenshot,omitempty"`
+		Video        *UploadArtifactResponse  `json:"video,omitempty"`
+		DOMSnapshots []UploadArtifactResponse `json:"domSnapshots,omitempty"`
 	} `json:"artifacts"`
 }
 
 type FinalizeSessionRequest struct {
-	ProjectID   string            `json:"projectId"`
-	URL         string            `json:"url"`
-	Title       string            `json:"title"`
-	Timestamp   time.Time         `json:"timestamp"`
-	Duration    int64             `json:"duration"`
+	ProjectID   string             `json:"projectId"`
+	URL         string             `json:"url"`
+	Title       string             `json:"title"`
+	Timestamp   time.Time          `json:"timestamp"`
+	Duration    int64              `json:"duration"`
 	Environment models.Environment `json:"environment"`
-	App         models.App        `json:"app"`
-	Error       *models.ErrorInfo `json:"error"`
-	Events      []models.Event    `json:"events"`
+	App         models.App         `json:"app"`
+	Error       *models.ErrorInfo  `json:"error"`
+	Events      []models.Event     `json:"events"`
 	Media       struct {
 		HasReplay bool `json:"hasReplay"`
 	} `json:"media"`
 }
 
 type FinalizeSessionResponse struct {
-	SessionID string   `json:"sessionId"`
-	Warnings  []string `json:"warnings,omitempty"`
+	SessionID string              `json:"sessionId"`
+	ShareURL  string              `json:"shareUrl,omitempty"`
+	Warnings  []string            `json:"warnings,omitempty"`
 	Storage   storagePolicyStatus `json:"storage"`
 }
 
@@ -272,7 +273,7 @@ func (h *UploadSessionHandler) FinalizeUploadSession(c *gin.Context) {
 
 	var uploadSession models.UploadSession
 	err := h.db.UploadSessions.FindOne(c.Request.Context(), bson.M{
-		"uploadId": uploadID,
+		"uploadId":  uploadID,
 		"projectId": projectID,
 	}).Decode(&uploadSession)
 	if err != nil {
@@ -391,9 +392,30 @@ func (h *UploadSessionHandler) FinalizeUploadSession(c *gin.Context) {
 
 	c.JSON(http.StatusOK, FinalizeSessionResponse{
 		SessionID: result.sessionID,
+		ShareURL:  buildShareURL(c, result.sessionID),
 		Warnings:  warnings,
 		Storage:   result.storageStatus,
 	})
+}
+
+func buildShareURL(c *gin.Context, sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+
+	scheme := "http"
+	if forwarded := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); forwarded != "" {
+		scheme = forwarded
+	} else if c.Request != nil && c.Request.TLS != nil {
+		scheme = "https"
+	}
+
+	host := c.Request.Host
+	if host == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%s://%s/share/%s", scheme, host, sessionID)
 }
 
 func getProjectIDFromContext(c *gin.Context) string {
