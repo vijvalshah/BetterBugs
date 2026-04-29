@@ -47,6 +47,20 @@ func Setup(router *gin.Engine, db *database.Database, minioClient *storage.MinIO
 			sessions.POST("/:id/comments", sessionHandler.AddComment)
 			sessions.GET("/:id", sessionHandler.GetByID)
 			sessions.DELETE("/:id", sessionHandler.Delete)
+
+			// Analysis endpoints (for MCP/Dashboard AI)
+			sessions.POST("/:id/analyze", sessionHandler.Analyze)
+			sessions.GET("/:id/analysis", sessionHandler.GetAnalysis)
+		}
+
+		// Projects routes
+		projects := v1.Group("/projects")
+		projects.Use(middleware.APIKeyAuth(db, cfg))
+		projects.Use(middleware.RateLimit(cfg))
+		{
+			projectHandler := handlers.NewProjectHandler(db)
+			projects.GET("/:id/stats", projectHandler.GetStats)
+			projects.GET("/:id/sessions", projectHandler.ListSessions)
 		}
 
 		media := v1.Group("/media")

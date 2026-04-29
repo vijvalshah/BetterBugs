@@ -280,6 +280,11 @@ func (h *SessionHandler) List(c *gin.Context) {
 		}
 	}
 
+	// Filter by error type (e.g., "TypeError", "ReferenceError")
+	if errorType := strings.TrimSpace(c.Query("errorType")); errorType != "" {
+		filter["error.type"] = bson.M{"$regex": errorType, "$options": "i"}
+	}
+
 	if search := strings.TrimSpace(c.Query("q")); search != "" {
 		pattern := bson.M{"$regex": search, "$options": "i"}
 		filter["$or"] = []bson.M{
@@ -787,4 +792,176 @@ func (h *SessionHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Session deleted successfully",
 	})
+}
+
+// SessionAnalysis represents AI analysis results for a session
+type SessionAnalysis struct {
+	SessionID     string                 `json:"sessionId" bson:"sessionId"`
+	Summary       string                 `json:"summary" bson:"summary"`
+	Severity      string                 `json:"severity" bson:"severity"` // low, medium, high, critical
+	RootCause     string                 `json:"rootCause" bson:"rootCause"`
+	SuggestedFix  string                 `json:"suggestedFix" bson:"suggestedFix"`
+	Tags          []string               `json:"tags" bson:"tags"`
+	SimilarIssues []SimilarIssue         `json:"similarIssues" bson:"similarIssues"`
+	AnalyzedAt    time.Time              `json:"analyzedAt" bson:"analyzedAt"`
+	Metadata      map[string]interface{} `json:"metadata" bson:"metadata"`
+}
+
+type SimilarIssue struct {
+	SessionID string `json:"sessionId" bson:"sessionId"`
+	Title     string `json:"title" bson:"title"`
+	Similarity float64 `json:"similarity" bson:"similarity"`
+}
+
+// Analyze godoc
+// @Summary Analyze session
+// @Description Trigger AI analysis of a session for the Dashboard AI panel
+// @Tags sessions
+// @Produce json
+// @Param id path string true "Session ID"
+// @Success 202 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Security ApiKeyAuth
+// @Router /sessions/{id}/analyze [post]
+func (h *SessionHandler) Analyze(c *gin.Context) {
+	sessionID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Find session
+	var session models.Session
+	err := h.db.Sessions.FindOne(ctx, bson.M{"sessionId": sessionID}).Decode(&session)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Session not found",
+			"code": "SESSION_NOT_FOUND",
+		})
+		return
+	}
+
+	// TODO: Integrate with AI service (Claude/GPT) for actual analysis
+	// For now, generate a basic analysis based on session data
+	analysis := generateBasicAnalysis(session)
+
+	// Store analysis in sessions collection (embedded field)
+	update := bson.M{
+		"$set": bson.M{
+			"analysis":     analysis,
+			"updatedAt":    time.Now(),
+		},
+	}
+
+	_, err = h.db.Sessions.UpdateOne(ctx, bson.M{"sessionId": sessionID}, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to store analysis",
+			"code": "ANALYSIS_STORE_ERROR",
+		})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message":     "Analysis initiated",
+		"sessionId":   sessionID,
+		"analyzedAt":  analysis.AnalyzedAt,
+	})
+}
+
+// GetAnalysis godoc
+// @Summary Get session analysis
+// @Description Get cached AI analysis for a session (Dashboard AI panel)
+// @Tags sessions
+// @Produce json
+// @Param id path string true "Session ID"
+// @Success 200 {object} SessionAnalysis
+// @Failure 404 {object} map[string]interface{}
+// @Security ApiKeyAuth
+// @Router /sessions/{id}/analysis [get]
+func (h *SessionHandler) GetAnalysis(c *gin.Context) {
+	sessionID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Find session with analysis
+	var session struct {
+		SessionID string          `bson:"sessionId"`
+		Analysis  *SessionAnalysis `bson:"analysis"`
+	}
+
+	err := h.db.Sessions.FindOne(ctx, bson.M{"sessionId": sessionID}).Decode(&session)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Session not found",
+			"code": "SESSION_NOT_FOUND",
+		})
+		return
+	}
+
+	if session.Analysis == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Analysis not available",
+			"code": "ANALYSIS_NOT_FOUND",
+			"message": "Run POST /sessions/:id/analyze first to generate analysis",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, session.Analysis)
+}
+
+func generateBasicAnalysis(session models.Session) *SessionAnalysis {
+	summary := "Session captured successfully."
+	severity := "low"
+	rootCause := "Not determined"
+	suggestedFix := "No issues detected."
+	tags := []string{}
+
+	if session.Error != nil {
+		tags = append(tags, "has-error")
+		summary = fmt.Sprintf("Session contains error: %s", session.Error.Message)
+
+		switch {
+		case strings.Contains(strings.ToLower(session.Error.Type), "type"):
+			severity = "medium"
+			rootCause = "JavaScript type error - likely accessing property on undefined/null"
+			suggestedFix = "Add null/undefined checks before accessing properties"
+			tags = append(tags, "type-error")
+		case strings.Contains(strings.ToLower(session.Error.Type), "reference"):
+			severity = "medium"
+			rootCause = "Variable referenced before definition"
+			suggestedFix = "Ensure variable is declared before use"
+			tags = append(tags, "reference-error")
+		case strings.Contains(strings.ToLower(session.Error.Type), "syntax"):
+			severity = "critical"
+			rootCause = "JavaScript syntax error"
+			suggestedFix = "Fix syntax in the code"
+			tags = append(tags, "syntax-error")
+		default:
+			severity = "medium"
+			tags = append(tags, "runtime-error")
+		}
+	}
+
+	if session.TriageSummary.ConsoleErrorCount > 0 {
+		tags = append(tags, "console-errors")
+		summary += fmt.Sprintf(" %d console errors detected.", session.TriageSummary.ConsoleErrorCount)
+	}
+
+	if session.TriageSummary.FailedRequestCount > 0 {
+		tags = append(tags, "network-errors")
+		summary += fmt.Sprintf(" %d failed network requests.", session.TriageSummary.FailedRequestCount)
+		severity = "high"
+		rootCause += " Network failures detected."
+	}
+
+	return &SessionAnalysis{
+		SessionID:    session.SessionID,
+		Summary:      summary,
+		Severity:     severity,
+		RootCause:    rootCause,
+		SuggestedFix: suggestedFix,
+		Tags:         tags,
+		AnalyzedAt:   time.Now(),
+		Metadata: map[string]interface{}{
+			"stats": session.Stats,
+		},
+	}
 }

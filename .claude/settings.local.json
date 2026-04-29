@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(curl -s -X GET \"http://localhost:3001/api/v1/sessions?limit=2\")",
+      "Bash(go run *)",
+      "Bash(go build *)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -H \"X-Project-Key: test-api-key\" \"http://localhost:3001/api/v1/projects/test-project/stats\")",
+      "Bash(curl -s -H \"X-Project-Key: test-api-key\" \"http://localhost:3001/api/v1/sessions?errorType=TypeError&limit=2\")",
+      "Bash(curl -s -H \"X-Project-Key: test-api-key\" \"http://localhost:3001/api/v1/sessions?errorType=TypeError\")",
+      "Bash(curl -s -X POST -H 'X-Project-Key: test-api-key' http://localhost:3001/api/v1/sessions/c39dc0a0-96ea-4ae6-aaf7-e3850b64f233/analyze)",
+      "Bash(curl -s -H 'X-Project-Key: test-api-key' http://localhost:3001/api/v1/sessions/c39dc0a0-96ea-4ae6-aaf7-e3850b64f233/analysis)",
+      "Bash(curl -s -H \"X-Project-Key: test-api-key\" \"http://localhost:3001/api/v1/projects/test-project/sessions?limit=1\")"
+    ]
+  }
+}
