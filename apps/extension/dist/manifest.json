@@ -32,7 +32,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-loader-X4xnrhzd.js"
+        "assets/index.ts-loader-BfNprDm3.js"
       ],
       "matches": [
         "<all_urls>"
@@ -57,10 +57,10 @@
       ],
       "resources": [
         "src/session-details/*",
-        "assets/types-DhVnsN-V.js",
-        "assets/types-DhVnsN-V.js.map",
-        "assets/index.ts-BDQavLtB.js",
-        "assets/index.ts-BDQavLtB.js.map",
+        "assets/types-DdczWsOC.js",
+        "assets/types-DdczWsOC.js.map",
+        "assets/index.ts-v6EUv5_-.js",
+        "assets/index.ts-v6EUv5_-.js.map",
         "assets/page-world-capture.ts-BkSkhaD-.js",
         "assets/page-world-capture.ts-BkSkhaD-.js.map"
       ],

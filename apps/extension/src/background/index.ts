@@ -149,6 +149,23 @@ function getTabState(tabId: number): TabCaptureState {
   return state;
 }
 
+function cleanupTabState(tabId: number): void {
+  const state = tabState.get(tabId);
+  if (!state) {
+    return;
+  }
+
+  if (state.videoPreview?.objectUrl) {
+    try {
+      URL.revokeObjectURL(state.videoPreview.objectUrl);
+    } catch {
+      // Ignore revoke errors.
+    }
+  }
+
+  tabState.delete(tabId);
+}
+
 function sendStatusUpdate(status: 'uploading' | 'success' | 'error', message: string): void {
   if (badgeResetTimer) {
     clearTimeout(badgeResetTimer);
@@ -258,6 +275,44 @@ type UploadResult = {
   sessionId?: string;
   recoverable?: boolean;
 };
+
+type PreparedUploadArtifacts = {
+  request: UploadSessionRequest;
+  blobs: {
+    screenshot?: Blob;
+    video?: Blob;
+  };
+};
+
+async function prepareUploadArtifacts(
+  config: ExtensionConfig,
+  state: TabCaptureState,
+): Promise<PreparedUploadArtifacts> {
+  const request: UploadSessionRequest = {
+    projectId: config.projectId,
+    artifacts: {},
+  };
+  const blobs: PreparedUploadArtifacts['blobs'] = {};
+
+  if (state.screenshotDataUrl) {
+    const blob = await dataUrlToBlob(state.screenshotDataUrl);
+    blobs.screenshot = blob;
+    request.artifacts.screenshot = {
+      contentType: blob.type || 'image/png',
+      sizeBytes: blob.size,
+    };
+  }
+
+  if (state.videoBlob) {
+    blobs.video = state.videoBlob;
+    request.artifacts.video = {
+      contentType: state.videoBlob.type || 'video/webm',
+      sizeBytes: state.videoBlob.size,
+    };
+  }
+
+  return { request, blobs };
+}
 
 async function uploadSessionPayload(payload: SessionPayload, config: ExtensionConfig): Promise<UploadResult> {
   const normalizedPayload = normalizeSessionPayloadForUpload(payload, config);
@@ -428,14 +483,70 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
     environment: normalizeEnvironmentInfo(state.environment),
     events: snapshot.events,
     media: {
-      hasReplay: false,
+      hasReplay: Boolean(state.videoBlob),
       metadata: createCaptureMediaMetadata(config, snapshot),
     },
   };
 
-  const result = await uploadSessionPayload(payload, config);
-  if (!result.ok) {
-    if (result.recoverable) {
+  const { request, blobs } = await prepareUploadArtifacts(config, state);
+  const hasArtifacts = Boolean(request.artifacts.screenshot || request.artifacts.video || request.artifacts.domSnapshots);
+  let result: UploadResult;
+
+  if (hasArtifacts) {
+    const uploadSession = await createUploadSession(config, request);
+    if (!uploadSession.ok || !uploadSession.data) {
+      sendStatusUpdate('error', uploadSession.message);
+      return { ok: false, message: uploadSession.message };
+    }
+
+    const artifacts = uploadSession.data.artifacts;
+
+    if (artifacts.screenshot && blobs.screenshot) {
+      if (state.screenshotPreview) {
+        state.screenshotPreview = { ...state.screenshotPreview, uploadState: 'uploading' };
+      }
+      const uploadResult = await uploadArtifact(artifacts.screenshot, blobs.screenshot);
+      if (!uploadResult.ok) {
+        if (state.screenshotPreview) {
+          state.screenshotPreview = { ...state.screenshotPreview, uploadState: 'failed' };
+        }
+        sendStatusUpdate('error', uploadResult.message);
+        return { ok: false, message: uploadResult.message };
+      }
+      if (state.screenshotPreview) {
+        state.screenshotPreview = {
+          ...state.screenshotPreview,
+          uploadState: 'uploaded',
+          uploadedKey: artifacts.screenshot.key,
+        };
+      }
+    }
+
+    if (artifacts.video && blobs.video) {
+      if (state.videoPreview) {
+        state.videoPreview = { ...state.videoPreview, uploadState: 'uploading' };
+      }
+      const uploadResult = await uploadArtifact(artifacts.video, blobs.video);
+      if (!uploadResult.ok) {
+        if (state.videoPreview) {
+          state.videoPreview = { ...state.videoPreview, uploadState: 'failed' };
+        }
+        sendStatusUpdate('error', uploadResult.message);
+        return { ok: false, message: uploadResult.message };
+      }
+      if (state.videoPreview) {
+        state.videoPreview = {
+          ...state.videoPreview,
+          uploadState: 'uploaded',
+          uploadedKey: artifacts.video.key,
+        };
+      }
+    }
+
+    result = await finalizeUploadSession(config, uploadSession.data.uploadId, payload);
+  } else {
+    result = await uploadSessionPayload(payload, config);
+    if (!result.ok && result.recoverable) {
       const queueSize = await queueSession(payload);
       const message = `Offline or unreachable API. Capture queued for sync (${queueSize} pending).`;
       sendStatusUpdate('success', message);
@@ -444,7 +555,9 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
         message,
       };
     }
+  }
 
+  if (!result.ok) {
     sendStatusUpdate('error', result.message);
     return {
       ok: false,
@@ -453,6 +566,7 @@ async function captureNow(): Promise<{ ok: boolean; message: string; sessionId?:
   }
 
   sendStatusUpdate('success', result.message);
+  cleanupTabState(tabId);
   tabState.set(tabId, {
     buffer: new RollingCaptureBuffer(BUFFER_WINDOW_MS, MAX_BUFFER_EVENTS),
     environment: state.environment,
@@ -795,6 +909,14 @@ async function stopVideoRecording(): Promise<{
     return { ok: false, message: 'No recording in progress.' };
   }
 
+  if (state.videoPreview?.objectUrl) {
+    try {
+      URL.revokeObjectURL(state.videoPreview.objectUrl);
+    } catch {
+      // Ignore revoke errors.
+    }
+  }
+
   const recorder = state.videoRecorder;
   recorder.stop();
 
@@ -806,6 +928,7 @@ async function stopVideoRecording(): Promise<{
   state.videoRecorder = undefined;
   state.videoChunks = undefined;
   state.videoStartTime = undefined;
+  state.videoBlob = blob;
 
   const preview: VideoPreview = {
     objectUrl,
@@ -814,24 +937,7 @@ async function stopVideoRecording(): Promise<{
   };
   state.videoPreview = preview;
 
-  const config = await getConfig();
-  const persistResult = await persistVideo(config, blob, capturedAt, tab);
-  if (persistResult.ok && persistResult.storedPath) {
-    state.videoPreview = {
-      ...preview,
-      storedPath: persistResult.storedPath,
-    };
-  }
-
-  if (!persistResult.ok) {
-    return {
-      ok: true,
-      message: `Recording stopped. ${persistResult.message}`,
-      preview: state.videoPreview,
-    };
-  }
-
-  return { ok: true, message: 'Recording stopped and stored.', preview: state.videoPreview };
+  return { ok: true, message: 'Recording stopped.', preview: state.videoPreview };
 }
 
 async function persistScreenshot(
@@ -889,27 +995,11 @@ async function captureScreenshot(): Promise<{
 
   const state = getTabState(tab.id);
   state.screenshotPreview = preview;
-
-  const config = await getConfig();
-  const persistResult = await persistScreenshot(config, preview, tab);
-  if (persistResult.ok && persistResult.storedPath) {
-    state.screenshotPreview = {
-      ...preview,
-      storedPath: persistResult.storedPath,
-    };
-  }
-
-  if (!persistResult.ok) {
-    return {
-      ok: true,
-      message: `Screenshot captured. ${persistResult.message}`,
-      preview: state.screenshotPreview,
-    };
-  }
+  state.screenshotDataUrl = dataUrl;
 
   return {
     ok: true,
-    message: 'Screenshot captured and stored.',
+    message: 'Screenshot captured.',
     preview: state.screenshotPreview,
   };
 }
@@ -922,6 +1012,10 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   await chrome.action.setBadgeText({ text: '' });
   await chrome.alarms.create(QUEUE_SYNC_ALARM, { periodInMinutes: 1 });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  cleanupTabState(tabId);
 });
 
 chrome.runtime.onStartup.addListener(() => {

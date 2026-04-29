@@ -230,12 +230,33 @@ function renderDomSnapshots(signedMedia?: ApiSessionDetail['signedMedia']): void
   };
 }
 
+function renderScreenshot(signedMedia?: ApiSessionDetail['signedMedia']): void {
+  if (typeof document === 'undefined') return;
+  const imageEl = document.getElementById('screenshotImage') as HTMLImageElement | null;
+  const emptyEl = document.getElementById('screenshotEmpty') as HTMLDivElement | null;
+  if (!imageEl || !emptyEl) return;
+
+  const screenshot = signedMedia?.screenshot;
+  if (screenshot) {
+    imageEl.src = screenshot;
+    imageEl.style.display = 'block';
+    emptyEl.style.display = 'none';
+    return;
+  }
+
+  imageEl.removeAttribute('src');
+  imageEl.style.display = 'none';
+  emptyEl.style.display = 'block';
+}
+
 function renderMedia(session: ApiSessionDetail): void {
   if (typeof document === 'undefined') return;
   const videoEl = document.getElementById('videoPlayer') as HTMLVideoElement | null;
   const timeline = document.getElementById('timeline') as HTMLInputElement | null;
   const readout = document.getElementById('timelineReadout');
   if (!videoEl || !timeline || !readout) return;
+
+  renderScreenshot(session.signedMedia);
 
   const videoSrc = session.signedMedia?.video;
   if (videoSrc) {

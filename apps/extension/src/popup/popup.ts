@@ -651,7 +651,7 @@ function computeSeverity(session: ApiSession): SessionSeverity {
   let score = 0;
   if (session.error || (triage?.errorCount ?? 0) > 0) {
     score += 60;
-    const type = (session.error.type || '').toLowerCase();
+    const type = (session.error?.type || '').toLowerCase();
     if (type.includes('type') || type.includes('reference') || type.includes('syntax')) {
       score += 20;
     }
